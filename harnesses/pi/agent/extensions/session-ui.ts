@@ -408,15 +408,9 @@ function registerToolRows(pi: ExtensionAPI): void {
 				return empty();
 			}
 
-			let text = theme.fg(
-				"dim",
-				`  ${matches} match${matches === 1 ? "" : "es"}`,
-			);
+			let text = theme.fg("dim", `  ${matches} match${matches === 1 ? "" : "es"}`);
 			if (details?.matchLimitReached)
-				text += theme.fg(
-					"warning",
-					` (hit limit ${details.matchLimitReached})`,
-				);
+				text += theme.fg("warning", ` (hit limit ${details.matchLimitReached})`);
 			if (body) {
 				const lines = body.split("\n").slice(0, MAX_DETAIL_LINES);
 				text += "\n" + lines.map((l) => theme.fg("dim", l)).join("\n");
@@ -635,9 +629,7 @@ export class CompactPasteEditor extends CustomEditor {
 			registry.pastes.set(pasteId, text);
 		} catch (error) {
 			this.reportCompatibilityFallback(
-				error instanceof Error
-					? error.message
-					: "image placeholder unavailable",
+				error instanceof Error ? error.message : "image placeholder unavailable",
 			);
 			// Preserve Pi's native path behavior if its private paste registry changes.
 			super.insertTextAtCursor(text);
@@ -891,10 +883,7 @@ function collectStats(entries: readonly unknown[]): Stats {
 				stats.latestCacheHitRate =
 					promptTokens > 0 ? (usage.cacheRead / promptTokens) * 100 : undefined;
 			}
-		} else if (
-			entry.type === "message" &&
-			entry.message?.role === "toolResult"
-		) {
+		} else if (entry.type === "message" && entry.message?.role === "toolResult") {
 			usage = entry.message.usage;
 		} else if (
 			(entry.type === "branch_summary" || entry.type === "compaction") &&
@@ -920,8 +909,8 @@ function isUsingSubscription(ctx: ExtensionContext): boolean {
 	if (model.provider === "kimi-coding") return true;
 	return (
 		ctx.modelRegistry.isUsingOAuth(model) &&
-		ctx.modelRegistry.getProvider(model.provider)?.auth.oauth
-			?.isSubscription === true
+		ctx.modelRegistry.getProvider(model.provider)?.auth.oauth?.isSubscription ===
+			true
 	);
 }
 
@@ -1070,9 +1059,7 @@ function registerStatusline(pi: ExtensionAPI): void {
 		const fastStatus = extensionStatuses.get("openai-fast");
 		const modelLabel =
 			theme.bold(modelName) +
-			(fastStatus === "fast"
-				? ` ${theme.fg("success", theme.bold("fast"))}`
-				: "");
+			(fastStatus === "fast" ? ` ${theme.fg("success", theme.bold("fast"))}` : "");
 		const modelSeg = seg(theme, "accent", I_MODEL, modelLabel);
 
 		const thinking = pi.getThinkingLevel();
@@ -1095,15 +1082,9 @@ function registerStatusline(pi: ExtensionAPI): void {
 		const usage = ctx.getContextUsage();
 		let ctxSeg = "";
 		if (usage) {
-			const contextWindow =
-				usage.contextWindow || ctx.model?.contextWindow || 0;
+			const contextWindow = usage.contextWindow || ctx.model?.contextWindow || 0;
 			if (usage.percent == null) {
-				ctxSeg = seg(
-					theme,
-					"success",
-					I_CTX,
-					`ctx ?/${fmtTokens(contextWindow)}`,
-				);
+				ctxSeg = seg(theme, "success", I_CTX, `ctx ?/${fmtTokens(contextWindow)}`);
 			} else {
 				const pct = Math.round(usage.percent);
 				const color = pctColor(pct);
@@ -1148,9 +1129,9 @@ function registerStatusline(pi: ExtensionAPI): void {
 
 		const mcpSegs: string[] = [];
 		const extSegs: string[] = [];
-		const sortedExtensionStatuses = Array.from(
-			extensionStatuses.entries(),
-		).sort(([a], [b]) => a.localeCompare(b));
+		const sortedExtensionStatuses = Array.from(extensionStatuses.entries()).sort(
+			([a], [b]) => a.localeCompare(b),
+		);
 		let hasMcpFooterStatus = false;
 		let mcpFromFooter: McpStatusView | undefined;
 		for (const [id, text] of sortedExtensionStatuses) {
@@ -1328,11 +1309,10 @@ async function pickEffortLevel(
 					const segmentWidth = Math.floor(targetWidth / levels.length);
 					const panelWidth = segmentWidth * levels.length;
 					const statusText = `current: ● ${current}`;
-					const minHeaderWidth = visibleWidth("Effort") + 2 + visibleWidth(statusText);
+					const minHeaderWidth =
+						visibleWidth("Effort") + 2 + visibleWidth(statusText);
 					const useVerticalLayout =
-						width < 18 ||
-						segmentWidth < maxLabelWidth ||
-						panelWidth < minHeaderWidth;
+						width < 18 || segmentWidth < maxLabelWidth || panelWidth < minHeaderWidth;
 
 					// 宽度不足时降级为垂直模式，避免轨道、标签或状态被截断。
 					if (useVerticalLayout) {
@@ -1432,15 +1412,9 @@ async function pickEffortLevel(
 								theme.bold(centerEffortCell(bracketed, segmentWidth)),
 							);
 						} else if (isCurrent) {
-							labelText = theme.fg(
-								"success",
-								centerEffortCell(lvl, segmentWidth),
-							);
+							labelText = theme.fg("success", centerEffortCell(lvl, segmentWidth));
 						} else {
-							labelText = theme.fg(
-								"muted",
-								centerEffortCell(lvl, segmentWidth),
-							);
+							labelText = theme.fg("muted", centerEffortCell(lvl, segmentWidth));
 						}
 						labelParts.push(labelText);
 					}
@@ -1641,9 +1615,7 @@ function userMessageText(content: unknown): string | undefined {
 		text = content
 			.filter(
 				(c): c is { type: string; text?: string } =>
-					!!c &&
-					typeof c === "object" &&
-					(c as { type?: string }).type === "text",
+					!!c && typeof c === "object" && (c as { type?: string }).type === "text",
 			)
 			.map((c) => c.text ?? "")
 			.join("\n");
