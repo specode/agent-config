@@ -1155,6 +1155,7 @@ function registerStatusline(pi: ExtensionAPI): void {
 		let mcpFromFooter: McpStatusView | undefined;
 		for (const [id, text] of sortedExtensionStatuses) {
 			if (id === "pi-lens-lsp" || id === "openai-fast" || !text) continue;
+			if (id === "pi-auto-review") continue;
 			if (id === "mcp") {
 				hasMcpFooterStatus = true;
 				mcpFromFooter = parseMcpFooterText(text);
