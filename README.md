@@ -17,7 +17,7 @@
 ./install-harness.sh pi
 ```
 
-> **Pi 安装后的必做配置：**自动审核模式（`pi-auto-review`）需要调用模型。安装完成后，请编辑 `~/.pi/agent/extensions/pi-auto-review/config.json`，把 `model` 改成你自己常用且当前 Pi 环境可用的模型 ID（格式通常为 `provider/model`）。仓库中的值只是示例，不保证其他用户可用；模型未配置正确时，自动审核将无法正常工作。
+> **Pi 安装后的必做配置：** 自动审核模式（`pi-auto-review`）需要调用模型。安装完成后，请编辑 `~/.pi/agent/extensions/pi-auto-review/config.json`，把 `model` 改成你自己常用且当前 Pi 环境可用的模型 ID（格式通常为 `provider/model`）。仓库中的值只是示例，不保证其他用户可用；模型未配置正确时，自动审核将无法正常工作。
 
 可用名称可随时查看：
 
