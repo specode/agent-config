@@ -774,7 +774,7 @@ const I_MODEL = "\uF2DB"; // nf-fa-microchip
 const I_EFFORT = "\uF0E7"; // nf-fa-bolt
 const I_DIR = "\uF07B"; // nf-fa-folder
 const I_BRANCH = "\uE0A0"; // powerline git branch
-const I_CTX = "\uF0E4"; // nf-fa-tachometer
+const I_CTX = "\uF1C0"; // nf-fa-database
 const I_SESSION = "\uF02B"; // nf-fa-tag
 const I_TOKENS = "\uF1C9"; // nf-fa-file-code-o
 const I_CACHE = "\uF1C0"; // nf-fa-database
@@ -1084,7 +1084,7 @@ function registerStatusline(pi: ExtensionAPI): void {
 		if (usage) {
 			const contextWindow = usage.contextWindow || ctx.model?.contextWindow || 0;
 			if (usage.percent == null) {
-				ctxSeg = seg(theme, "success", I_CTX, `ctx ?/${fmtTokens(contextWindow)}`);
+				ctxSeg = seg(theme, "success", I_CTX, `?%/${fmtTokens(contextWindow)}`);
 			} else {
 				const pct = Math.round(usage.percent);
 				const color = pctColor(pct);
@@ -1092,7 +1092,7 @@ function registerStatusline(pi: ExtensionAPI): void {
 					theme,
 					"success",
 					I_CTX,
-					`ctx ${theme.fg(color, theme.bold(`${pct}%`))}/${fmtTokens(contextWindow)}`,
+					`${theme.fg(color, theme.bold(`${pct}%`))}/${fmtTokens(contextWindow)}`,
 				);
 			}
 		}
