@@ -1,0 +1,33 @@
+{
+  "theme": "light/light",
+  "enabledModels": [
+    "openai-codex/gpt-5.6-sol",
+    "antigravity/gemini-3.7-flash",
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro"
+  ],
+  "externalEditor": "nvim",
+  "collapseChangelog": true,
+  "showHardwareCursor": true,
+  "autocompleteMaxVisible": 8,
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time",
+  "packages": [
+    "npm:pi-subagents",
+    "npm:pi-web-access",
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:pi-lens",
+    "npm:pi-mcp-adapter",
+    "npm:@specode/pi-kimi-cu",
+    "npm:@specode/pi-kimi-webbridge-bootstrap",
+    "npm:@ogulcancelik/pi-codex-compaction",
+    "npm:@diegopetrucci/pi-openai-fast",
+    "npm:pi-antigravity",
+    "npm:@gotgenes/pi-permission-system",
+    "npm:@erichll/pi-auto-review"
+  ],
+  "hideThinkingBlock": true,
+  "fullscreenScrollbar": "auto",
+  "tuiMode": "fullscreen",
+  "treeFilterMode": "no-tools"
+}

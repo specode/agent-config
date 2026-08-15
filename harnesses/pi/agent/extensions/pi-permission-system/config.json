@@ -1,0 +1,99 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/main/packages/pi-permission-system/schemas/permissions.schema.json",
+  "debugLog": false,
+  "permissionReviewLog": true,
+  "yoloMode": false,
+  "doublePressToConfirm": true,
+  "authorizerChain": [
+    "pi-auto-review"
+  ],
+  "piInfrastructureReadPaths": [
+    "~/.agents",
+    "~/.pi/agent/npm/node_modules/*",
+    "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/*",
+    "/var/folders/*/T/pi-clipboard-*.png",
+    "/private/var/folders/*/T/pi-clipboard-*.png"
+  ],
+  "permission": {
+    "*": "ask",
+    "path": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "~/.ssh/id_*": "deny",
+      "~/.ssh/*.pem": "deny",
+      "~/.ssh/*.key": "deny",
+      "~/.aws/credentials": "deny",
+      "~/.config/gh/hosts.yml": "deny",
+      "~/.config/gcloud/application_default_credentials.json": "deny",
+      "~/.kube/config": "deny",
+      "~/.docker/config.json": "deny",
+      "~/.netrc": "deny",
+      "~/.npmrc": "deny",
+      "~/.pypirc": "deny",
+      "~/.pi/agent/auth.json": "deny",
+      "~/.pi/agent/models.json": "deny"
+    },
+    "read": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+    "write": {
+      "*": "ask",
+      "~/.pi/agent/settings.json": "deny",
+      "~/.pi/agent/permissions.json": "deny",
+      "~/.pi/agent/sandbox.json": "deny",
+      "~/.pi/agent/extensions/pi-permission-system": "deny",
+      "~/.pi/agent/extensions/pi-permission-system/*": "deny",
+      "~/.pi/agent/extensions/pi-auto-review": "deny",
+      "~/.pi/agent/extensions/pi-auto-review/*": "deny",
+      ".pi/settings.json": "deny",
+      "*/.pi/settings.json": "deny",
+      ".pi/sandbox.json": "deny",
+      "*/.pi/sandbox.json": "deny",
+      ".pi/pi-auto-review.json": "deny",
+      "*/.pi/pi-auto-review.json": "deny",
+      ".pi/extensions/pi-permission-system": "deny",
+      ".pi/extensions/pi-permission-system/*": "deny",
+      "*/.pi/extensions/pi-permission-system": "deny",
+      "*/.pi/extensions/pi-permission-system/*": "deny",
+      ".pi/permissions.json": "deny",
+      "*/.pi/permissions.json": "deny"
+    },
+    "edit": {
+      "*": "ask",
+      "~/.pi/agent/settings.json": "deny",
+      "~/.pi/agent/permissions.json": "deny",
+      "~/.pi/agent/sandbox.json": "deny",
+      "~/.pi/agent/extensions/pi-permission-system": "deny",
+      "~/.pi/agent/extensions/pi-permission-system/*": "deny",
+      "~/.pi/agent/extensions/pi-auto-review": "deny",
+      "~/.pi/agent/extensions/pi-auto-review/*": "deny",
+      ".pi/settings.json": "deny",
+      "*/.pi/settings.json": "deny",
+      ".pi/sandbox.json": "deny",
+      "*/.pi/sandbox.json": "deny",
+      ".pi/pi-auto-review.json": "deny",
+      "*/.pi/pi-auto-review.json": "deny",
+      ".pi/extensions/pi-permission-system": "deny",
+      ".pi/extensions/pi-permission-system/*": "deny",
+      "*/.pi/extensions/pi-permission-system": "deny",
+      "*/.pi/extensions/pi-permission-system/*": "deny",
+      ".pi/permissions.json": "deny",
+      "*/.pi/permissions.json": "deny"
+    },
+    "bash": {
+      "*": "ask",
+      "pwd": "allow"
+    },
+    "mcp": {
+      "*": "ask",
+      "mcp_status": "allow",
+      "mcp_list": "allow",
+      "mcp_search": "allow",
+      "mcp_describe": "allow"
+    },
+    "skill": "allow",
+    "external_directory": "allow"
+  }
+}
