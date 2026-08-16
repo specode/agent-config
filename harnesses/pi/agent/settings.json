@@ -22,9 +22,7 @@
     "npm:@specode/pi-kimi-webbridge-bootstrap",
     "npm:@ogulcancelik/pi-codex-compaction",
     "npm:@diegopetrucci/pi-openai-fast",
-    "npm:pi-antigravity",
-    "npm:@gotgenes/pi-permission-system",
-    "npm:@erichll/pi-auto-review"
+    "npm:pi-antigravity"
   ],
   "hideThinkingBlock": true,
   "fullscreenScrollbar": "auto",

@@ -52,8 +52,6 @@ pi)
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-' \
 			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-' \
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-' \
-			'harnesses/pi/agent/extensions/pi-permission-system/config.json|.pi/agent/extensions/pi-permission-system/config.json|file|600' \
-			'harnesses/pi/agent/extensions/pi-auto-review/config.json|.pi/agent/extensions/pi-auto-review/config.json|file|600' \
 			'harnesses/pi/web-search.json|.pi/web-search.json|file|-' \
 			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-'
 	}
