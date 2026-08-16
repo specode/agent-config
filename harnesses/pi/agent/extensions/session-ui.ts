@@ -777,7 +777,7 @@ const I_BRANCH = "\uE0A0"; // powerline git branch
 const I_CTX = "\uF1C0"; // nf-fa-database
 const I_SESSION = "\uF02B"; // nf-fa-tag
 const I_TOKENS = "\uF1C9"; // nf-fa-file-code-o
-const I_CACHE = "\uF1C0"; // nf-fa-database
+const I_CACHE = "\uF49B"; // nf-oct-cache
 const I_COST = "\uF155"; // nf-fa-dollar
 const I_MCP = "\uF1E6"; // nf-fa-plug
 const I_SEP = "\uE0B1"; // powerline thin chevron
@@ -807,7 +807,7 @@ const STATUSLINE_MODULES: ReadonlyArray<{
 	{ id: "branch", enabled: true },
 	{ id: "context", enabled: true },
 	{ id: "tokens", enabled: true },
-	{ id: "cache", enabled: false },
+	{ id: "cache", enabled: true },
 	{ id: "cost", enabled: true },
 	{ id: "mcp", enabled: true },
 	{ id: "extensions", enabled: true },
@@ -851,13 +851,60 @@ function thinkingColor(level: string): ThemeColor {
 	}
 }
 
+interface CacheUsage {
+	input: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
+
+interface CacheHitRates {
+	current?: number;
+	rolling5?: number;
+	session?: number;
+}
+
+function tokenWeightedHitRate(
+	usages: readonly CacheUsage[],
+): number | undefined {
+	let cacheRead = 0;
+	let promptTokens = 0;
+
+	for (const usage of usages) {
+		cacheRead += usage.cacheRead;
+		promptTokens += usage.input + usage.cacheRead + usage.cacheWrite;
+	}
+
+	return promptTokens > 0 ? (cacheRead / promptTokens) * 100 : undefined;
+}
+
+function calculateCacheHitRates(usages: readonly CacheUsage[]): CacheHitRates {
+	const current = tokenWeightedHitRate(usages.slice(-1));
+	const rolling5 = tokenWeightedHitRate(usages.slice(-5));
+	const session = tokenWeightedHitRate(usages);
+
+	return {
+		...(current === undefined ? {} : { current }),
+		...(rolling5 === undefined ? {} : { rolling5 }),
+		...(session === undefined ? {} : { session }),
+	};
+}
+
+function formatCacheHitRates(rates: CacheHitRates): string | undefined {
+	const values = [rates.current, rates.rolling5, rates.session];
+	if (values.every((rate) => rate === undefined)) return undefined;
+
+	return values
+		.map((rate) => (rate === undefined ? "-" : `${Math.round(rate)}%`))
+		.join("/");
+}
+
 interface Stats {
 	input: number;
 	output: number;
 	cacheRead: number;
 	cacheWrite: number;
 	cost: number;
-	latestCacheHitRate?: number;
+	cacheHitRates: CacheHitRates;
 }
 
 /** Mirror Pi's built-in footer accounting; this footer only changes presentation. */
@@ -868,7 +915,9 @@ function collectStats(entries: readonly unknown[]): Stats {
 		cacheRead: 0,
 		cacheWrite: 0,
 		cost: 0,
+		cacheHitRates: {},
 	};
+	const assistantUsages: CacheUsage[] = [];
 
 	for (const entry of entries as Array<{
 		type?: string;
@@ -879,9 +928,11 @@ function collectStats(entries: readonly unknown[]): Stats {
 		if (entry.type === "message" && entry.message?.role === "assistant") {
 			usage = entry.message.usage;
 			if (usage) {
-				const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
-				stats.latestCacheHitRate =
-					promptTokens > 0 ? (usage.cacheRead / promptTokens) * 100 : undefined;
+				assistantUsages.push({
+					input: usage.input,
+					cacheRead: usage.cacheRead,
+					cacheWrite: usage.cacheWrite,
+				});
 			}
 		} else if (entry.type === "message" && entry.message?.role === "toolResult") {
 			usage = entry.message.usage;
@@ -900,6 +951,7 @@ function collectStats(entries: readonly unknown[]): Stats {
 		stats.cost += usage.cost.total;
 	}
 
+	stats.cacheHitRates = calculateCacheHitRates(assistantUsages);
 	return stats;
 }
 
@@ -1107,21 +1159,10 @@ function registerStatusline(pi: ExtensionAPI): void {
 						`↑${fmtTokens(stats.input)} ↓${fmtTokens(stats.output)}`,
 					)
 				: "";
-		const cacheParts: string[] = [];
-		if (stats.cacheRead > 0)
-			cacheParts.push(`read ${fmtTokens(stats.cacheRead)}`);
-		if (stats.cacheWrite > 0)
-			cacheParts.push(`write ${fmtTokens(stats.cacheWrite)}`);
-		if (
-			(stats.cacheRead > 0 || stats.cacheWrite > 0) &&
-			stats.latestCacheHitRate !== undefined
-		) {
-			cacheParts.push(`hit ${stats.latestCacheHitRate.toFixed(1)}%`);
-		}
-		const cacheSeg =
-			cacheParts.length > 0
-				? seg(theme, "success", I_CACHE, cacheParts.join(" · "))
-				: "";
+		const cacheHitRates = formatCacheHitRates(stats.cacheHitRates);
+		const cacheSeg = cacheHitRates
+			? seg(theme, "success", I_CACHE, cacheHitRates)
+			: "";
 		let costSeg = "";
 		if (stats.cost > 0 || isUsingSubscription(ctx)) {
 			costSeg = seg(theme, "success", I_COST, stats.cost.toFixed(3));
