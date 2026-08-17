@@ -2,6 +2,7 @@
   "theme": "light/light",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
+    "xai/grok-4.6:xhigh",
     "antigravity/gemini-3.7-flash",
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-pro"
