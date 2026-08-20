@@ -5,6 +5,7 @@
  *
  * 能力:
  *   - 工具调用默认单行摘要（edit 始终展示 diff）
+ *   - 同一轮相邻的 read/ls 与 grep/find 自动合并为 Activity 行
  *   - Claude Code 风格底部状态栏
  *   - 剪贴板图片显示为 [Image N]，长文本显示为 [Paste N · size]，提交时仍展开原内容
  *   - 终端标题跟随任务 summary（非原文；提交后即并行生成，思考中就会更新）
@@ -56,6 +57,7 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
+	type Component,
 } from "@earendil-works/pi-tui";
 import type { TSchema } from "typebox";
 import { homedir } from "node:os";
@@ -154,12 +156,341 @@ function metaFromOriginal<T extends TSchema>(tool: {
 	};
 }
 
+type GroupableToolName = "read" | "grep" | "find" | "ls";
+type ActivityKind = "search" | "inspect";
+type ActivityStatus = "pending" | "running" | "done" | "error";
+
+type ToolRowRenderContext = {
+	toolCallId: string;
+	executionStarted: boolean;
+	isPartial: boolean;
+	isError: boolean;
+	expanded: boolean;
+	invalidate(): void;
+};
+
+type ActivitySpec = {
+	kind: ActivityKind;
+	action: string;
+	detail: string;
+};
+
+type ActivityMember = ActivitySpec & {
+	toolCallId: string;
+	toolName: GroupableToolName;
+	status: ActivityStatus;
+	summary?: string;
+	detailLines?: string[];
+};
+
+type ActivityGroup = {
+	id: number;
+	turnId: number;
+	kind: ActivityKind;
+	leaderId: string;
+	members: ActivityMember[];
+};
+
+function activitySpec(
+	toolName: string,
+	args: Record<string, unknown> | undefined,
+): ActivitySpec | undefined {
+	if (toolName === "read") {
+		return {
+			kind: "inspect",
+			action: "Read",
+			detail: shortPath(typeof args?.path === "string" ? args.path : undefined),
+		};
+	}
+	if (toolName === "ls") {
+		return {
+			kind: "inspect",
+			action: "Listed",
+			detail: shortPath(
+				typeof args?.path === "string" ? args.path : undefined,
+				".",
+			),
+		};
+	}
+	if (toolName === "grep") {
+		const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
+		let where = "";
+		if (typeof args?.path === "string") where = shortPath(args.path);
+		else if (typeof args?.glob === "string") where = args.glob;
+		return {
+			kind: "search",
+			action: "Searched",
+			detail: where ? `/${pattern}/ in ${where}` : `/${pattern}/`,
+		};
+	}
+	if (toolName === "find") {
+		const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
+		const where =
+			typeof args?.path === "string" ? ` in ${shortPath(args.path)}` : "";
+		return {
+			kind: "search",
+			action: "Found",
+			detail: `${pattern}${where}`,
+		};
+	}
+	return undefined;
+}
+
+function activityStatus(context: ToolRowRenderContext): ActivityStatus {
+	if (context.isError) return "error";
+	if (!context.executionStarted) return "pending";
+	return "running";
+}
+
+function activityStatusRank(status: ActivityStatus): number {
+	switch (status) {
+		case "error":
+			return 3;
+		case "done":
+			return 2;
+		case "running":
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+function activityGlyph(theme: Theme, status: ActivityStatus): string {
+	if (status === "error") return theme.fg("error", "✗");
+	if (status === "running") return theme.fg("warning", "◆");
+	if (status === "done") return theme.fg("success", "◇");
+	return theme.fg("muted", "◇");
+}
+
+function activityPreview(
+	toolName: GroupableToolName,
+	result: TextResult,
+): Pick<ActivityMember, "summary" | "detailLines"> {
+	const body = textOf(result);
+	const lines = body ? body.split("\n").filter(Boolean) : [];
+	if (toolName === "read") {
+		const image = result.content?.some((entry) => entry.type === "image");
+		const count = lineCount(body);
+		let summary = `${count} line${count === 1 ? "" : "s"}`;
+		if (image) summary = "image";
+		return {
+			summary,
+			detailLines: image ? [] : lines,
+		};
+	}
+	if (toolName === "grep") {
+		return {
+			summary: `${lines.length} match${lines.length === 1 ? "" : "es"}`,
+			detailLines: lines,
+		};
+	}
+	if (toolName === "find") {
+		return {
+			summary: `${lines.length} path${lines.length === 1 ? "" : "s"}`,
+			detailLines: lines,
+		};
+	}
+	return {
+		summary: `${lines.length} entr${lines.length === 1 ? "y" : "ies"}`,
+		detailLines: lines,
+	};
+}
+
+function activityMemberKey(member: ActivityMember): string {
+	return JSON.stringify({
+		status: member.status,
+		summary: member.summary,
+		detailLines: member.detailLines,
+	});
+}
+
+function renderActivityGroup(
+	group: ActivityGroup,
+	theme: Theme,
+	expanded: boolean,
+): Component {
+	if (group.members.length === 1) {
+		const member = group.members[0];
+		if (!member) return empty();
+		let text = `${activityGlyph(theme, member.status)} ${theme.fg("toolTitle", theme.bold(member.action))}`;
+		if (member.detail) text += ` ${theme.fg("accent", member.detail)}`;
+		if (expanded && member.summary)
+			text += `\n${theme.fg("dim", `  ${member.summary}`)}`;
+		if (expanded && member.detailLines?.length) {
+			const shown = member.detailLines.slice(0, MAX_DETAIL_LINES);
+			text += `\n${shown.map((line) => theme.fg("dim", line)).join("\n")}`;
+			if (member.detailLines.length > shown.length) {
+				text += `\n${theme.fg("muted", `… ${member.detailLines.length - shown.length} more`)}`;
+			}
+		}
+		return new Text(text, 0, 0);
+	}
+
+	const errors = group.members.filter(
+		(member) => member.status === "error",
+	).length;
+	const running = group.members.filter(
+		(member) => member.status === "running",
+	).length;
+	const pending = group.members.filter(
+		(member) => member.status === "pending",
+	).length;
+	const done = group.members.length - errors - running - pending;
+	let status: ActivityStatus = "done";
+	if (errors) status = "error";
+	else if (running || pending) status = "running";
+	const label = group.kind === "search" ? "Searched" : "Inspected";
+	const stats = [
+		`${group.members.length} targets`,
+		done ? `${done} done` : "",
+		running ? `${running} running` : "",
+		pending ? `${pending} pending` : "",
+		errors ? `${errors} failed` : "",
+	].filter(Boolean);
+	let text = `${activityGlyph(theme, status)} ${theme.fg("toolTitle", theme.bold(label))} ${theme.fg("accent", stats.join(" · "))}`;
+
+	if (expanded) {
+		let detailBudget = MAX_DETAIL_LINES;
+		for (const member of group.members) {
+			text += `\n  ${activityGlyph(theme, member.status)} ${theme.fg("muted", member.action)} ${theme.fg("accent", member.detail)}`;
+			if (member.summary) text += theme.fg("dim", ` · ${member.summary}`);
+			if (detailBudget <= 0 || !member.detailLines?.length) continue;
+			const shown = member.detailLines.slice(0, Math.min(4, detailBudget));
+			for (const line of shown) text += `\n    ${theme.fg("dim", line)}`;
+			detailBudget -= shown.length;
+			if (member.detailLines.length > shown.length) {
+				text += `\n    ${theme.fg("muted", `… ${member.detailLines.length - shown.length} more`)}`;
+			}
+		}
+	}
+	return new Text(text, 0, 0);
+}
+
+function createActivityGroups(pi: ExtensionAPI) {
+	let turnId = 0;
+	let nextGroupId = 1;
+	let activeGroup: ActivityGroup | undefined;
+	const groups = new Map<number, ActivityGroup>();
+	const groupByToolCall = new Map<string, number>();
+	const invalidators = new Map<string, () => void>();
+
+	const notify = (group: ActivityGroup) => {
+		queueMicrotask(() => {
+			for (const member of group.members) invalidators.get(member.toolCallId)?.();
+		});
+	};
+
+	const reset = () => {
+		turnId = 0;
+		nextGroupId = 1;
+		activeGroup = undefined;
+		groups.clear();
+		groupByToolCall.clear();
+		invalidators.clear();
+	};
+
+	pi.on("session_start", async () => reset());
+	pi.on("session_shutdown", async () => reset());
+	pi.on("turn_start", async () => {
+		turnId += 1;
+		activeGroup = undefined;
+	});
+	pi.on("turn_end", async () => {
+		activeGroup = undefined;
+	});
+	pi.on("tool_execution_start", async (event) => {
+		const spec = activitySpec(
+			event.toolName,
+			event.args as Record<string, unknown>,
+		);
+		if (!spec) {
+			activeGroup = undefined;
+			return;
+		}
+		if (
+			!activeGroup ||
+			activeGroup.turnId !== turnId ||
+			activeGroup.kind !== spec.kind
+		) {
+			activeGroup = {
+				id: nextGroupId++,
+				turnId,
+				kind: spec.kind,
+				leaderId: event.toolCallId,
+				members: [],
+			};
+			groups.set(activeGroup.id, activeGroup);
+		}
+		if (groupByToolCall.has(event.toolCallId)) return;
+		activeGroup.members.push({
+			...spec,
+			toolCallId: event.toolCallId,
+			toolName: event.toolName as GroupableToolName,
+			status: "running",
+		});
+		groupByToolCall.set(event.toolCallId, activeGroup.id);
+		notify(activeGroup);
+	});
+
+	return {
+		renderCall(
+			toolName: GroupableToolName,
+			args: Record<string, unknown> | undefined,
+			theme: Theme,
+			context: ToolRowRenderContext,
+			fallback: () => Component,
+		): Component {
+			invalidators.set(context.toolCallId, context.invalidate);
+			const groupId = groupByToolCall.get(context.toolCallId);
+			const group = groupId === undefined ? undefined : groups.get(groupId);
+			if (!group) return fallback();
+			const member = group.members.find(
+				(entry) => entry.toolCallId === context.toolCallId,
+			);
+			if (!member) return fallback();
+			const spec = activitySpec(toolName, args);
+			if (spec) Object.assign(member, spec);
+			const nextStatus = activityStatus(context);
+			if (activityStatusRank(nextStatus) >= activityStatusRank(member.status)) {
+				member.status = nextStatus;
+			}
+			if (group.leaderId !== context.toolCallId) return empty();
+			return renderActivityGroup(group, theme, context.expanded);
+		},
+		renderResult(
+			toolName: GroupableToolName,
+			result: TextResult,
+			context: ToolRowRenderContext,
+		): Component | undefined {
+			const groupId = groupByToolCall.get(context.toolCallId);
+			const group = groupId === undefined ? undefined : groups.get(groupId);
+			if (!group) return undefined;
+			const member = group.members.find(
+				(entry) => entry.toolCallId === context.toolCallId,
+			);
+			if (!member) return undefined;
+			const before = activityMemberKey(member);
+			member.status = "done";
+			if (context.isError) member.status = "error";
+			else if (context.isPartial) member.status = "running";
+			const preview = activityPreview(toolName, result);
+			member.summary = context.isError
+				? textOf(result).split("\n")[0] || "failed"
+				: preview.summary;
+			member.detailLines = preview.detailLines;
+			if (before !== activityMemberKey(member)) notify(group);
+			return empty();
+		},
+	};
+}
+
 // ─────────────────────────────────────────────────────────────
 // Tool rows (Grok-style one-liners)
 // ─────────────────────────────────────────────────────────────
 
 function registerToolRows(pi: ExtensionAPI): void {
 	const cwd = process.cwd();
+	const activityGroups = createActivityGroups(pi);
 
 	const originalRead = createReadTool(cwd);
 	pi.registerTool({
@@ -176,21 +507,35 @@ function registerToolRows(pi: ExtensionAPI): void {
 			);
 		},
 		renderCall(args, theme, context) {
-			const path = shortPath(args?.path);
-			if (context.isPartial || !context.executionStarted) {
-				return bullet(
-					theme,
-					context.executionStarted ? "run" : "info",
-					"Read",
-					path,
-				);
-			}
-			if (context.isError) {
-				return bullet(theme, "err", "Read", path);
-			}
-			return bullet(theme, "ok", "Read", path);
+			return activityGroups.renderCall(
+				"read",
+				args as Record<string, unknown>,
+				theme,
+				context,
+				() => {
+					const path = shortPath(args?.path);
+					if (context.isPartial || !context.executionStarted) {
+						return bullet(
+							theme,
+							context.executionStarted ? "run" : "info",
+							"Read",
+							path,
+						);
+					}
+					if (context.isError) {
+						return bullet(theme, "err", "Read", path);
+					}
+					return bullet(theme, "ok", "Read", path);
+				},
+			);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
+			const grouped = activityGroups.renderResult(
+				"read",
+				result as TextResult,
+				context,
+			);
+			if (grouped) return grouped;
 			if (isPartial) return empty();
 			if (context.isError)
 				return expanded ? errorLine(theme, result as TextResult) : empty();
@@ -379,23 +724,37 @@ function registerToolRows(pi: ExtensionAPI): void {
 			);
 		},
 		renderCall(args, theme, context) {
-			const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
-			const where = args?.path
-				? shortPath(args.path)
-				: args?.glob
-					? String(args.glob)
-					: "";
-			const detail = where ? `/${pattern}/ in ${where}` : `/${pattern}/`;
-			if (context.isError) return bullet(theme, "err", "Searched", detail);
-			if (context.isPartial) return bullet(theme, "run", "Searched", detail);
-			return bullet(
+			return activityGroups.renderCall(
+				"grep",
+				args as Record<string, unknown>,
 				theme,
-				context.executionStarted ? "ok" : "info",
-				"Searched",
-				detail,
+				context,
+				() => {
+					const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
+					const where = args?.path
+						? shortPath(args.path)
+						: args?.glob
+							? String(args.glob)
+							: "";
+					const detail = where ? `/${pattern}/ in ${where}` : `/${pattern}/`;
+					if (context.isError) return bullet(theme, "err", "Searched", detail);
+					if (context.isPartial) return bullet(theme, "run", "Searched", detail);
+					return bullet(
+						theme,
+						context.executionStarted ? "ok" : "info",
+						"Searched",
+						detail,
+					);
+				},
 			);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
+			const grouped = activityGroups.renderResult(
+				"grep",
+				result as TextResult,
+				context,
+			);
+			if (grouped) return grouped;
 			if (isPartial) return empty();
 			if (context.isError)
 				return expanded ? errorLine(theme, result as TextResult) : empty();
@@ -437,19 +796,33 @@ function registerToolRows(pi: ExtensionAPI): void {
 			);
 		},
 		renderCall(args, theme, context) {
-			const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
-			const where = args?.path ? ` in ${shortPath(args.path)}` : "";
-			const detail = `${pattern}${where}`;
-			if (context.isError) return bullet(theme, "err", "Found", detail);
-			if (context.isPartial) return bullet(theme, "run", "Found", detail);
-			return bullet(
+			return activityGroups.renderCall(
+				"find",
+				args as Record<string, unknown>,
 				theme,
-				context.executionStarted ? "ok" : "info",
-				"Found",
-				detail,
+				context,
+				() => {
+					const pattern = ellipsize(String(args?.pattern ?? ""), MAX_PATTERN_CHARS);
+					const where = args?.path ? ` in ${shortPath(args.path)}` : "";
+					const detail = `${pattern}${where}`;
+					if (context.isError) return bullet(theme, "err", "Found", detail);
+					if (context.isPartial) return bullet(theme, "run", "Found", detail);
+					return bullet(
+						theme,
+						context.executionStarted ? "ok" : "info",
+						"Found",
+						detail,
+					);
+				},
 			);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
+			const grouped = activityGroups.renderResult(
+				"find",
+				result as TextResult,
+				context,
+			);
+			if (grouped) return grouped;
 			if (isPartial) return empty();
 			if (context.isError)
 				return expanded ? errorLine(theme, result as TextResult) : empty();
@@ -487,17 +860,31 @@ function registerToolRows(pi: ExtensionAPI): void {
 			);
 		},
 		renderCall(args, theme, context) {
-			const path = shortPath(args?.path, ".");
-			if (context.isError) return bullet(theme, "err", "Listed", path);
-			if (context.isPartial) return bullet(theme, "run", "Listed", path);
-			return bullet(
+			return activityGroups.renderCall(
+				"ls",
+				args as Record<string, unknown>,
 				theme,
-				context.executionStarted ? "ok" : "info",
-				"Listed",
-				path,
+				context,
+				() => {
+					const path = shortPath(args?.path, ".");
+					if (context.isError) return bullet(theme, "err", "Listed", path);
+					if (context.isPartial) return bullet(theme, "run", "Listed", path);
+					return bullet(
+						theme,
+						context.executionStarted ? "ok" : "info",
+						"Listed",
+						path,
+					);
+				},
 			);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
+			const grouped = activityGroups.renderResult(
+				"ls",
+				result as TextResult,
+				context,
+			);
+			if (grouped) return grouped;
 			if (isPartial) return empty();
 			if (context.isError)
 				return expanded ? errorLine(theme, result as TextResult) : empty();
@@ -2074,22 +2461,32 @@ function formatTurnDuration(ms: number): string {
 	return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
-function registerTurnDuration(pi: ExtensionAPI): void {
+export function registerTurnDuration(pi: ExtensionAPI): void {
 	let startedAt: number | undefined;
+	let lastCompleted: TurnDurationData | undefined;
+	let pendingCompaction: TurnDurationData | undefined;
+	let continueAfterCompaction = false;
 
 	const markStart = () => {
-		if (startedAt === undefined) startedAt = Date.now();
+		if (startedAt !== undefined) return;
+		startedAt =
+			continueAfterCompaction && pendingCompaction
+				? pendingCompaction.startedAt
+				: Date.now();
+		pendingCompaction = undefined;
+		continueAfterCompaction = false;
 	};
 
 	const emit = (endedAt: number) => {
 		if (startedAt === undefined) return;
-		const started = startedAt;
-		startedAt = undefined;
-		pi.appendEntry<TurnDurationData>(TURN_DURATION_TYPE, {
-			ms: Math.max(0, endedAt - started),
-			startedAt: started,
+		const completed = {
+			ms: Math.max(0, endedAt - startedAt),
+			startedAt,
 			endedAt,
-		});
+		};
+		startedAt = undefined;
+		lastCompleted = completed;
+		pi.appendEntry<TurnDurationData>(TURN_DURATION_TYPE, completed);
 	};
 
 	pi.registerEntryRenderer<TurnDurationData>(
@@ -2104,7 +2501,14 @@ function registerTurnDuration(pi: ExtensionAPI): void {
 		},
 	);
 
-	// First start wins so retries / compaction / follow-ups stay one wall clock.
+	// A forced compaction can settle the current run, then use sendUserMessage()
+	// to continue as a new run. Extension input continues the original clock;
+	// real interactive/RPC input always starts a separate task.
+	pi.on("input", async (event) => {
+		continueAfterCompaction =
+			pendingCompaction !== undefined && event.source === "extension";
+		if (!continueAfterCompaction) pendingCompaction = undefined;
+	});
 	pi.on("before_agent_start", async () => {
 		markStart();
 	});
@@ -2121,11 +2525,23 @@ function registerTurnDuration(pi: ExtensionAPI): void {
 		emit(endedAt);
 	});
 
-	pi.on("session_start", async () => {
+	pi.on("session_compact", async () => {
+		// If compaction happened after this handler already emitted at settled,
+		// make that completed fragment available to the synthetic continuation.
+		pendingCompaction = startedAt === undefined ? lastCompleted : undefined;
+	});
+
+	const reset = () => {
 		startedAt = undefined;
+		lastCompleted = undefined;
+		pendingCompaction = undefined;
+		continueAfterCompaction = false;
+	};
+	pi.on("session_start", async () => {
+		reset();
 	});
 	pi.on("session_shutdown", async () => {
-		startedAt = undefined;
+		reset();
 	});
 }
 
