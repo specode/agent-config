@@ -6,6 +6,7 @@
  * - Paste placeholders reuse Pi's native editor registry behind runtime guards;
  *   incompatible editor internals fall back to native paste behavior.
  * - Footer modules are registered segments whose order is controlled by config.
+ * - Hidden ui_meta records drive per-turn titles, recaps, and high-level session names.
  *
  * Configuration: ./session-ui/config.json
  * Override path: PI_SESSION_UI_CONFIG=/absolute/path/to/config.json
@@ -22,12 +23,21 @@ import { registerEffort } from "./session-ui/effort.ts";
 import { registerStatusline } from "./session-ui/statusline.ts";
 import { registerToolActivity } from "./session-ui/tool-activity.ts";
 import { registerTurnDuration } from "./session-ui/turn-duration.ts";
+import { registerUiMeta } from "./session-ui/ui-meta.ts";
 
 export default function sessionUi(pi: ExtensionAPI): void {
  const loaded = loadSessionUiConfig();
  const { config } = loaded;
 
  if (config.turnDuration.enabled) registerTurnDuration(pi);
+ if (
+  config.uiMeta.enabled &&
+  (config.uiMeta.title.enabled ||
+   config.uiMeta.recap.enabled ||
+   config.uiMeta.sessionName.enabled)
+ ) {
+  registerUiMeta(pi, config.uiMeta);
+ }
  if (config.compactPaste.enabled) registerCompactPasteEditor(pi);
  if (config.toolActivity.enabled) registerToolActivity(pi, config.toolActivity);
  if (config.statusline.enabled) registerStatusline(pi, config.statusline);

@@ -27,6 +27,22 @@ export interface SessionUiConfig {
 	turnDuration: {
 		enabled: boolean;
 	};
+	uiMeta: {
+		enabled: boolean;
+		title: {
+			enabled: boolean;
+			maxLength: number;
+		};
+		recap: {
+			enabled: boolean;
+			maxLength: number;
+		};
+		sessionName: {
+			enabled: boolean;
+			maxLength: number;
+			manualNameLocks: boolean;
+		};
+	};
 }
 
 export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
@@ -62,6 +78,22 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 	},
 	turnDuration: {
 		enabled: true,
+	},
+	uiMeta: {
+		enabled: true,
+		title: {
+			enabled: true,
+			maxLength: 36,
+		},
+		recap: {
+			enabled: true,
+			maxLength: 120,
+		},
+		sessionName: {
+			enabled: true,
+			maxLength: 48,
+			manualNameLocks: true,
+		},
 	},
 };
 
@@ -136,6 +168,10 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	const extensionStatuses = objectValue(statusline.extensionStatuses);
 	const effort = objectValue(raw.effort);
 	const turnDuration = objectValue(raw.turnDuration);
+	const uiMeta = objectValue(raw.uiMeta);
+	const uiMetaTitle = objectValue(uiMeta.title);
+	const uiMetaRecap = objectValue(uiMeta.recap);
+	const uiMetaSessionName = objectValue(uiMeta.sessionName);
 
 	let placement = DEFAULT_SESSION_UI_CONFIG.toolActivity.placement;
 	if (toolActivity.placement !== undefined) {
@@ -227,6 +263,68 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				"turnDuration.enabled",
 				warnings,
 			),
+		},
+		uiMeta: {
+			enabled: booleanValue(
+				uiMeta.enabled,
+				DEFAULT_SESSION_UI_CONFIG.uiMeta.enabled,
+				"uiMeta.enabled",
+				warnings,
+			),
+			title: {
+				enabled: booleanValue(
+					uiMetaTitle.enabled,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.title.enabled,
+					"uiMeta.title.enabled",
+					warnings,
+				),
+				maxLength: boundedInteger(
+					uiMetaTitle.maxLength,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.title.maxLength,
+					"uiMeta.title.maxLength",
+					8,
+					80,
+					warnings,
+				),
+			},
+			recap: {
+				enabled: booleanValue(
+					uiMetaRecap.enabled,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.recap.enabled,
+					"uiMeta.recap.enabled",
+					warnings,
+				),
+				maxLength: boundedInteger(
+					uiMetaRecap.maxLength,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.recap.maxLength,
+					"uiMeta.recap.maxLength",
+					20,
+					240,
+					warnings,
+				),
+			},
+			sessionName: {
+				enabled: booleanValue(
+					uiMetaSessionName.enabled,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.sessionName.enabled,
+					"uiMeta.sessionName.enabled",
+					warnings,
+				),
+				maxLength: boundedInteger(
+					uiMetaSessionName.maxLength,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.sessionName.maxLength,
+					"uiMeta.sessionName.maxLength",
+					8,
+					100,
+					warnings,
+				),
+				manualNameLocks: booleanValue(
+					uiMetaSessionName.manualNameLocks,
+					DEFAULT_SESSION_UI_CONFIG.uiMeta.sessionName.manualNameLocks,
+					"uiMeta.sessionName.manualNameLocks",
+					warnings,
+				),
+			},
 		},
 	};
 }

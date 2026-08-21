@@ -36,5 +36,21 @@
   },
   "turnDuration": {
     "enabled": true
+  },
+  "uiMeta": {
+    "enabled": true,
+    "title": {
+      "enabled": true,
+      "maxLength": 36
+    },
+    "recap": {
+      "enabled": true,
+      "maxLength": 120
+    },
+    "sessionName": {
+      "enabled": true,
+      "maxLength": 48,
+      "manualNameLocks": true
+    }
   }
 }

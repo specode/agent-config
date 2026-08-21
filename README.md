@@ -65,8 +65,9 @@
 - statusline：可配置 segment 顺序、溢出策略和扩展状态过滤；`/statusline` 可切回 Pi 默认 footer。
 - effort：`/effort` 只提供当前模型实际支持的 thinking 档位。
 - turn duration：把耗时作为自定义 transcript entry 写入，但只在交互式 TUI 会话启用。
+- UI Meta：复用主模型正常响应中的隐藏 `turn_start` / `turn_end` 元数据更新终端标题、写入 Recap，并在高层目标切换时更新 session 名称；不发起额外模型请求。
 
-当前 session-ui **不提供**终端标题生成、自动 session 命名或 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
+UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
 
 ### 未启用的 Pi 配置
 

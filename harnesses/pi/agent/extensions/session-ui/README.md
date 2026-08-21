@@ -12,6 +12,7 @@
 | `statusline` | 开启 | 用可组合 segments 替换默认 footer | 仅有 UI 的会话；可用 `/statusline` 临时切换 |
 | `effort` | 开启 | 用 `/effort` 查看或调整模型支持的 thinking 档位 | 选择面板仅 TUI；非 TUI 需显式传档位 |
 | `turnDuration` | 开启 | 在 transcript 中追加 turn 耗时 entry | 仅 TUI；不会发送给模型 |
+| `uiMeta` | 开启 | 从主模型正常响应提取隐藏元数据，驱动标题、Recap 和 session 名称 | 仅 TUI；不发起额外模型请求 |
 
 工具活动只订阅 `tool_execution_*` 生命周期事件，不调用 `registerTool`，因此不会覆盖 Pi 内置工具、远程 operation、SDK 工具或其他扩展注册的工具。持久结果始终由工具自身的原生 transcript renderer 展示。
 
@@ -39,6 +40,14 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `statusline.extensionStatuses.exclude` | string[] | 过滤 extension status ID；支持 `*` 通配符 |
 | `effort.enabled` | boolean | 是否注册 `/effort` |
 | `turnDuration.enabled` | boolean | 是否在 TUI transcript 中记录耗时 |
+| `uiMeta.enabled` | boolean | 是否启用统一的隐藏 UI 元数据协议 |
+| `uiMeta.title.enabled` | boolean | 是否按最近一轮任务更新终端标题 |
+| `uiMeta.title.maxLength` | 8–80 | 标题最大可见字符数；默认 36 |
+| `uiMeta.recap.enabled` | boolean | 是否把本轮实际结果写为 transcript entry |
+| `uiMeta.recap.maxLength` | 20–240 | Recap 最大可见字符数；默认 120 |
+| `uiMeta.sessionName.enabled` | boolean | 是否按会话最新高层目标自动更新 session 名称 |
+| `uiMeta.sessionName.maxLength` | 8–100 | session 名称最大可见字符数；默认 48 |
+| `uiMeta.sessionName.manualNameLocks` | boolean | 用户手工 `/name` 后是否阻止后续自动覆盖；默认开启 |
 
 配置文件只在扩展加载时读取；修改后使用 `/reload` 或重新启动 Pi。
 
@@ -76,23 +85,34 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 在当前会话中切换自定义 footer 与 Pi 默认 footer。该切换不修改 `config.json`，reload 或重新启动后仍以配置文件为准。
 
-## 明确不提供的旧行为
+## UI Meta 协议
 
-当前模块化实现不再包含：
+`uiMeta` 不额外调用模型。它在正常请求的 system prompt 中加入固定协议，并通过临时的 `<ui_meta_request>` 上下文标记要求主模型输出两类隐藏记录：
 
-- 终端标题的 LLM 摘要；
-- 自动 session 命名；
-- `/unname`；
-- 对内置 `read`、`grep`、`bash` 等工具的重新注册或 Activity transcript 合并。
+```xml
+<ui_meta>{"v":1,"kind":"turn_start","title":"评估 UI 元数据","session":{"action":"keep"}}</ui_meta>
+<ui_meta>{"v":1,"kind":"turn_end","recap":"完成协议评估并确定实现边界"}</ui_meta>
+```
 
-这些是当前范围边界，不应从旧单文件实现推断仍然存在。`npm:@ogulcancelik/pi-codex-compaction` 也未在当前 `settings.json` 中启用；session-ui 不负责替代该 package 的 compaction 行为。
+- `turn_start` 位于第一条 assistant 消息开头：`title` 表示最近一轮正在做什么；`session` 只有在首次明确目标或高层目标切换时才使用 `set`。
+- `turn_end` 位于无工具调用的最终 assistant 消息末尾：`recap` 表示本轮实际完成、部分完成或阻塞的结果。
+- metadata 在流式 TUI 中由 Markdown transformer 隐藏，在 `message_end` 持久化前从 assistant 消息中删除。
+- Recap 作为 `session-ui:turn-recap` 自定义 entry 持久化，不进入模型上下文。
+- 自动 session 名称通过 `session-ui:ui-meta-state` 记录来源；手工 `/name` 默认锁定 session 名称，但不会阻止每轮终端标题更新。
+- 所有字段都会过滤终端控制字符、双向文本控制符并按配置截断；无效 JSON、过期阶段或失败响应会被忽略。
+
+该能力仅在交互式 TUI 中启用。JSON、print 和 RPC 模式不会注入协议，避免隐藏元数据进入这些模式的流式输出。模型不遵守协议时保持上一标题且不生成 Recap，不影响正常回答。
+
+当前模块化实现仍不提供 `/unname`，也不会重新注册内置 `read`、`grep`、`bash` 等工具或合并 Activity transcript。`npm:@ogulcancelik/pi-codex-compaction` 未在当前 `settings.json` 中启用；session-ui 不负责替代该 package 的 compaction 行为。
 
 ## 验证
 
 仓库没有项目级 `package.json` 或 `tsconfig.json`。当前可直接运行的单元测试是：
 
 ```bash
-node --test harnesses/pi/agent/extensions/session-ui/statusline-core.test.ts
+node --test \
+  harnesses/pi/agent/extensions/session-ui/statusline-core.test.ts \
+  harnesses/pi/agent/extensions/session-ui/ui-meta-core.test.ts
 ```
 
 可以用已安装的 Pi 做只加载检查：
@@ -103,4 +123,4 @@ pi --no-extensions --offline \
   --list-models grok-4.6
 ```
 
-测试覆盖 statusline 核心布局、glob 过滤、未知 segment 和 MCP status 解码；`/effort` 交互、工具并发投影、真实 TUI footer、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。
+测试覆盖 statusline 核心布局、glob 过滤、未知 segment、MCP status 解码，以及 UI Meta 解析、清理、截断和流式隐藏；`/effort` 交互、工具并发投影、真实 TUI footer、真实模型协议遵循度、自动/手工 session 名称切换、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。
