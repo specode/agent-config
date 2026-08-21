@@ -1,0 +1,543 @@
+import type { Usage } from "@earendil-works/pi-ai";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+	Theme,
+} from "@earendil-works/pi-coding-agent";
+import { basename } from "node:path";
+import { homedir } from "node:os";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { SessionUiConfig } from "./config.ts";
+import {
+	findUnknownStatusSegments,
+	fitStatuslineItems,
+	isExtensionStatusExcluded,
+	parseMcpFooterText,
+	parseMcpStatusEvent,
+	type McpStatusView,
+	type StatuslineOverflow,
+} from "./statusline-core.ts";
+import {
+	ellipsize,
+	formatTokens,
+	sanitizeTerminalText,
+	segment,
+	statusColor,
+	thinkingColor,
+} from "./shared.ts";
+
+const I_MODEL = "\uF2DB";
+const I_EFFORT = "\uF0E7";
+const I_DIR = "\uF07B";
+const I_BRANCH = "\uE0A0";
+const I_CTX = "\uF1C0";
+const I_SESSION = "\uF02B";
+const I_TOKENS = "\uF1C9";
+const I_CACHE = "\uF49B";
+const I_COST = "\uF155";
+const I_MCP = "\uF1E6";
+const I_SEP = "\uE0B1";
+const REGISTER_SEGMENT_EVENT = "session-ui/statusline/register/v1";
+
+interface FooterData {
+	getGitBranch(): string | null;
+	getExtensionStatuses(): ReadonlyMap<string, string>;
+	onBranchChange(callback: () => void): () => void;
+}
+
+interface CacheUsage {
+	input: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
+
+interface CacheHitRates {
+	current?: number;
+	rolling5?: number;
+	session?: number;
+}
+
+interface Stats {
+	input: number;
+	output: number;
+	cost: number;
+	cacheHitRates: CacheHitRates;
+}
+
+function isUsingSubscription(ctx: ExtensionContext): boolean {
+	const model = ctx.model;
+	if (!model) return false;
+	if (model.provider === "kimi-coding") return true;
+	return (
+		ctx.modelRegistry.isUsingOAuth(model) &&
+		ctx.modelRegistry.getProvider(model.provider)?.auth.oauth?.isSubscription ===
+			true
+	);
+}
+
+export interface StatusSegmentValue {
+	full: string;
+	compact?: string;
+}
+
+export interface StatusSegmentContext {
+	pi: ExtensionAPI;
+	ctx: ExtensionContext;
+	theme: Theme;
+	footerData: FooterData;
+	stats: Stats;
+}
+
+export interface StatusSegment {
+	id: string;
+	priority: number;
+	required?: boolean;
+	render(context: StatusSegmentContext): StatusSegmentValue | undefined;
+}
+
+interface RenderedSegment extends StatusSegmentValue {
+	id: string;
+	priority: number;
+	required: boolean;
+	value: string;
+}
+
+class StatusSegmentRegistry {
+	private readonly segments = new Map<string, StatusSegment>();
+
+	register(segmentDefinition: StatusSegment): void {
+		this.segments.set(segmentDefinition.id, segmentDefinition);
+	}
+
+	get(id: string): StatusSegment | undefined {
+		return this.segments.get(id);
+	}
+
+	ids(): ReadonlySet<string> {
+		return new Set(this.segments.keys());
+	}
+}
+
+function tokenWeightedHitRate(
+	usages: readonly CacheUsage[],
+): number | undefined {
+	let cacheRead = 0;
+	let promptTokens = 0;
+	for (const usage of usages) {
+		cacheRead += usage.cacheRead;
+		promptTokens += usage.input + usage.cacheRead + usage.cacheWrite;
+	}
+	return promptTokens > 0 ? (cacheRead / promptTokens) * 100 : undefined;
+}
+
+function calculateCacheHitRates(usages: readonly CacheUsage[]): CacheHitRates {
+	const current = tokenWeightedHitRate(usages.slice(-1));
+	const rolling5 = tokenWeightedHitRate(usages.slice(-5));
+	const session = tokenWeightedHitRate(usages);
+	return {
+		...(current === undefined ? {} : { current }),
+		...(rolling5 === undefined ? {} : { rolling5 }),
+		...(session === undefined ? {} : { session }),
+	};
+}
+
+function formatCacheHitRates(rates: CacheHitRates): string | undefined {
+	const values = [rates.current, rates.rolling5, rates.session];
+	if (values.every((rate) => rate === undefined)) return undefined;
+	return values
+		.map((rate) => (rate === undefined ? "-" : `${Math.round(rate)}%`))
+		.join("/");
+}
+
+export function collectStats(entries: readonly unknown[]): Stats {
+	const stats: Stats = {
+		input: 0,
+		output: 0,
+		cost: 0,
+		cacheHitRates: {},
+	};
+	const assistantUsages: CacheUsage[] = [];
+
+	for (const entry of entries as Array<{
+		type?: string;
+		message?: { role?: string; usage?: Usage };
+		usage?: Usage;
+	}>) {
+		let usage: Usage | undefined;
+		if (entry.type === "message" && entry.message?.role === "assistant") {
+			usage = entry.message.usage;
+			if (usage) {
+				assistantUsages.push({
+					input: usage.input,
+					cacheRead: usage.cacheRead,
+					cacheWrite: usage.cacheWrite,
+				});
+			}
+		} else if (entry.type === "message" && entry.message?.role === "toolResult") {
+			usage = entry.message.usage;
+		} else if (
+			(entry.type === "branch_summary" || entry.type === "compaction") &&
+			entry.usage
+		) {
+			usage = entry.usage;
+		}
+		if (!usage) continue;
+		stats.input += usage.input;
+		stats.output += usage.output;
+		stats.cost += usage.cost.total;
+	}
+	stats.cacheHitRates = calculateCacheHitRates(assistantUsages);
+	return stats;
+}
+
+function shortenHomePath(value: string): string {
+	const home = homedir();
+	if (value === home) return "~";
+	if (value.startsWith(`${home}/`)) return `~${value.slice(home.length)}`;
+	return value;
+}
+
+export function layoutStatusSegments(
+	segments: readonly RenderedSegment[],
+	width: number,
+	separator: string,
+	overflow: StatuslineOverflow,
+): string {
+	const fitted = fitStatuslineItems(
+		segments.map((segmentDefinition) => ({
+			id: segmentDefinition.id,
+			priority: segmentDefinition.priority,
+			required: segmentDefinition.required,
+			value: segmentDefinition.value,
+			width: visibleWidth(segmentDefinition.value),
+			...(segmentDefinition.compact
+				? {
+						compactValue: segmentDefinition.compact,
+						compactWidth: visibleWidth(segmentDefinition.compact),
+					}
+				: {}),
+		})),
+		width,
+		visibleWidth(separator),
+		overflow,
+	);
+	const line = fitted.map((item) => item.value).join(separator);
+	return visibleWidth(line) <= width ? line : truncateToWidth(line, width);
+}
+
+function registerBuiltInSegments(
+	registry: StatusSegmentRegistry,
+	getMcpFromEvent: () => McpStatusView | undefined,
+	excludedExtensionStatuses: readonly string[],
+): void {
+	registry.register({
+		id: "model",
+		priority: 100,
+		required: true,
+		render: ({ ctx, theme, footerData }) => {
+			const fullName = ctx.model?.name || ctx.model?.id || "no-model";
+			const compactName = ctx.model?.id || fullName;
+			const fastStatus = footerData.getExtensionStatuses().get("openai-fast");
+			const fastLabel =
+				fastStatus === "fast" ? ` ${theme.fg("success", theme.bold("fast"))}` : "";
+			return {
+				full: segment(
+					theme,
+					"accent",
+					I_MODEL,
+					`${theme.bold(fullName)}${fastLabel}`,
+				),
+				compact: segment(
+					theme,
+					"accent",
+					I_MODEL,
+					`${theme.bold(ellipsize(compactName, 20))}${fastLabel}`,
+				),
+			};
+		},
+	});
+
+	registry.register({
+		id: "effort",
+		priority: 80,
+		render: ({ pi, theme }) => {
+			const level = pi.getThinkingLevel();
+			if (!level || level === "off") return undefined;
+			return { full: segment(theme, thinkingColor(level), I_EFFORT, level) };
+		},
+	});
+
+	registry.register({
+		id: "directory",
+		priority: 65,
+		render: ({ ctx, theme }) => ({
+			full: segment(theme, "mdLink", I_DIR, shortenHomePath(ctx.cwd)),
+			compact: segment(theme, "mdLink", I_DIR, basename(ctx.cwd) || "."),
+		}),
+	});
+
+	registry.register({
+		id: "session",
+		priority: 55,
+		render: ({ ctx, theme }) => {
+			const name = ctx.sessionManager.getSessionName();
+			if (!name) return undefined;
+			const safe = sanitizeTerminalText(name);
+			return {
+				full: segment(theme, "muted", I_SESSION, safe),
+				compact: segment(theme, "muted", I_SESSION, ellipsize(safe, 18)),
+			};
+		},
+	});
+
+	registry.register({
+		id: "branch",
+		priority: 60,
+		render: ({ theme, footerData }) => {
+			const branch = footerData.getGitBranch();
+			if (!branch) return undefined;
+			const safe = sanitizeTerminalText(branch);
+			return {
+				full: segment(theme, "warning", I_BRANCH, safe),
+				compact: segment(theme, "warning", I_BRANCH, ellipsize(safe, 16)),
+			};
+		},
+	});
+
+	registry.register({
+		id: "context",
+		priority: 95,
+		required: true,
+		render: ({ ctx, theme }) => {
+			const usage = ctx.getContextUsage();
+			if (!usage) return undefined;
+			const window = usage.contextWindow || ctx.model?.contextWindow || 0;
+			if (usage.percent == null) {
+				return {
+					full: segment(theme, "success", I_CTX, `?%/${formatTokens(window)}`),
+				};
+			}
+			const percent = Math.round(usage.percent);
+			const colored = theme.fg(statusColor(percent), theme.bold(`${percent}%`));
+			return {
+				full: segment(
+					theme,
+					"success",
+					I_CTX,
+					`${colored}/${formatTokens(window)}`,
+				),
+				compact: segment(theme, "success", I_CTX, colored),
+			};
+		},
+	});
+
+	registry.register({
+		id: "tokens",
+		priority: 35,
+		render: ({ stats, theme }) => {
+			if (stats.input <= 0 && stats.output <= 0) return undefined;
+			return {
+				full: segment(
+					theme,
+					"accent",
+					I_TOKENS,
+					`↑${formatTokens(stats.input)} ↓${formatTokens(stats.output)}`,
+				),
+			};
+		},
+	});
+
+	registry.register({
+		id: "cache",
+		priority: 25,
+		render: ({ stats, theme }) => {
+			const rates = formatCacheHitRates(stats.cacheHitRates);
+			return rates
+				? { full: segment(theme, "success", I_CACHE, rates) }
+				: undefined;
+		},
+	});
+
+	registry.register({
+		id: "cost",
+		priority: 20,
+		render: ({ ctx, stats, theme }) =>
+			stats.cost > 0 || isUsingSubscription(ctx)
+				? { full: segment(theme, "success", I_COST, stats.cost.toFixed(3)) }
+				: undefined,
+	});
+
+	registry.register({
+		id: "mcp",
+		priority: 15,
+		render: ({ footerData, theme }) => {
+			const footerStatus = footerData.getExtensionStatuses().get("mcp");
+			if (!footerStatus) return undefined;
+			const view = getMcpFromEvent() ?? parseMcpFooterText(footerStatus);
+			if (!view || view.enabledCount <= 0) return undefined;
+			const names = (getMcpFromEvent()?.connectedNames ?? view.connectedNames)
+				.map(sanitizeTerminalText)
+				.filter(Boolean)
+				.join(", ");
+			const suffix = names ? ` (${names})` : "";
+			return {
+				full: segment(
+					theme,
+					"accent",
+					I_MCP,
+					`MCP: ${view.connectedCount}/${view.enabledCount}${suffix}`,
+				),
+			};
+		},
+	});
+
+	registry.register({
+		id: "extensions",
+		priority: 10,
+		render: ({ footerData, theme }) => {
+			const statuses = [...footerData.getExtensionStatuses().entries()]
+				.filter(
+					([id, value]) =>
+						Boolean(value) &&
+						!isExtensionStatusExcluded(id, excludedExtensionStatuses),
+				)
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([, value]) => sanitizeTerminalText(value))
+				.filter(Boolean);
+			if (statuses.length === 0) return undefined;
+			const separator = `  ${theme.fg("accent", I_SEP)}  `;
+			return {
+				full: statuses.join(separator),
+				compact: `+${statuses.length} status`,
+			};
+		},
+	});
+}
+
+function isStatusSegment(value: unknown): value is StatusSegment {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as Partial<StatusSegment>;
+	return (
+		typeof candidate.id === "string" &&
+		candidate.id.length > 0 &&
+		typeof candidate.priority === "number" &&
+		typeof candidate.render === "function"
+	);
+}
+
+export function registerStatusline(
+	pi: ExtensionAPI,
+	config: SessionUiConfig["statusline"],
+): void {
+	const registry = new StatusSegmentRegistry();
+	let enabled = true;
+	let requestRender: (() => void) | undefined;
+	let statsCache: { length: number; stats: Stats } | undefined;
+	let mcpFromEvent: McpStatusView | undefined;
+	registerBuiltInSegments(
+		registry,
+		() => mcpFromEvent,
+		config.extensionStatuses.exclude,
+	);
+
+	pi.events.on("pi-mcp-adapter/status/v1", (data) => {
+		mcpFromEvent = parseMcpStatusEvent(data);
+		requestRender?.();
+	});
+
+	pi.events.on(REGISTER_SEGMENT_EVENT, (value) => {
+		if (!isStatusSegment(value)) return;
+		registry.register(value);
+		requestRender?.();
+	});
+
+	const getStats = (ctx: ExtensionContext): Stats => {
+		const entries = ctx.sessionManager.getEntries();
+		if (!statsCache || statsCache.length !== entries.length) {
+			statsCache = { length: entries.length, stats: collectStats(entries) };
+		}
+		return statsCache.stats;
+	};
+
+	const apply = (ctx: ExtensionContext) => {
+		if (!ctx.hasUI || ctx.mode !== "tui") return;
+		if (!enabled) {
+			ctx.ui.setFooter(undefined);
+			requestRender = undefined;
+			return;
+		}
+
+		ctx.ui.setFooter((tui, theme, footerData) => {
+			requestRender = () => tui.requestRender();
+			const unsubscribe = footerData.onBranchChange(() => {
+				statsCache = undefined;
+				tui.requestRender();
+			});
+			return {
+				dispose: unsubscribe,
+				invalidate() {},
+				render(width: number): string[] {
+					const context: StatusSegmentContext = {
+						pi,
+						ctx,
+						theme,
+						footerData: footerData as FooterData,
+						stats: getStats(ctx),
+					};
+					const rendered = config.segments.flatMap((id) => {
+						const definition = registry.get(id);
+						if (!definition) return [];
+						const value = definition.render(context);
+						if (!value?.full) return [];
+						return [
+							{
+								id,
+								priority: definition.priority,
+								required: definition.required === true,
+								...value,
+								value: value.full,
+							} satisfies RenderedSegment,
+						];
+					});
+					const separator = `  ${theme.fg("accent", I_SEP)}  `;
+					return [layoutStatusSegments(rendered, width, separator, config.overflow)];
+				},
+			};
+		});
+	};
+
+	pi.on("session_start", (_event, ctx) => {
+		statsCache = undefined;
+		mcpFromEvent = undefined;
+		const unknownSegments = findUnknownStatusSegments(
+			config.segments,
+			registry.ids(),
+		);
+		if (unknownSegments.length > 0 && ctx.hasUI) {
+			ctx.ui.notify(
+				`Unknown statusline segments ignored: ${unknownSegments.join(", ")}`,
+				"warning",
+			);
+		}
+		apply(ctx);
+	});
+
+	const refresh = () => requestRender?.();
+	pi.on("turn_end", refresh);
+	pi.on("agent_settled", refresh);
+	pi.on("model_select", refresh);
+	pi.on("thinking_level_select", refresh);
+	pi.on("session_info_changed", refresh);
+
+	pi.registerCommand("statusline", {
+		description: "Toggle the session UI statusline",
+		handler: async (_args, ctx) => {
+			enabled = !enabled;
+			apply(ctx);
+			ctx.ui.notify(
+				enabled ? "Custom statusline enabled" : "Default footer restored",
+				"info",
+			);
+		},
+	});
+}

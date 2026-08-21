@@ -50,6 +50,7 @@ pi)
 			'harnesses/pi/agent/settings.json|.pi/agent/settings.json|file|-' \
 			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-' \
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-' \
+			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-' \
 			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-' \
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-' \
 			'harnesses/pi/web-search.json|.pi/web-search.json|file|-' \

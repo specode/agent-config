@@ -1,0 +1,40 @@
+{
+  "toolActivity": {
+    "enabled": true,
+    "placement": "aboveEditor",
+    "maxItems": 6
+  },
+  "compactPaste": {
+    "enabled": true
+  },
+  "statusline": {
+    "enabled": true,
+    "overflow": "drop-right",
+    "segments": [
+      "model",
+      "effort",
+      "directory",
+      "branch",
+      "context",
+      "tokens",
+      "cache",
+      "cost",
+      "mcp",
+      "extensions"
+    ],
+    "extensionStatuses": {
+      "exclude": [
+        "pi-lens-lsp",
+        "openai-fast",
+        "mcp",
+        "mcp-*"
+      ]
+    }
+  },
+  "effort": {
+    "enabled": true
+  },
+  "turnDuration": {
+    "enabled": true
+  }
+}
