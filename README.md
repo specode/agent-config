@@ -69,6 +69,16 @@
 
 UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
 
+### Pi work-animation
+
+`harnesses/pi/agent/extensions/work-animation.ts` 提供 Pi 工作态动画，配置文件为同目录下的 `work-animation.json`。启用后会隐藏 Pi 原生工作提示行，在编辑器上方显示带英文状态的小人，并在保留原标题的同时为终端标题添加动画前缀。动画随 agent 生命周期自动启停，不提供单独的 demo 模式。
+
+可用命令：
+
+- `/work-animation` 或 `/work-animation status`：查看状态；
+- `/work-animation on`：启用并保存；
+- `/work-animation off`：停用并恢复 Pi 原生工作提示。
+
 ### 未启用的 Pi 配置
 
 以下文件仍保留在仓库中，但不在 `install-harness.sh pi` 的安装清单内，对当前 Pi 配置不生效：
