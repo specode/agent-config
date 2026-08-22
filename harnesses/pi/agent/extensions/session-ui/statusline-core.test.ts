@@ -65,14 +65,6 @@ test("extension status filters support exact ids and star wildcards", () => {
 		isExtensionStatusExcluded("mcp-kimi-cu", ["openai-fast", "mcp-*"]),
 		true,
 	);
-	assert.equal(
-		isExtensionStatusExcluded("smart-compact-policy", ["smart-compact*"]),
-		true,
-	);
-	assert.equal(
-		isExtensionStatusExcluded("smart-compact-progress", ["smart-compact*"]),
-		true,
-	);
 });
 
 test("unknown configured segments are reported", () => {

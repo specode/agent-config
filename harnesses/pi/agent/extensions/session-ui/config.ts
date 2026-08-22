@@ -70,7 +70,7 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 			"extensions",
 		],
 		extensionStatuses: {
-			exclude: ["pi-lens-lsp", "openai-fast", "mcp", "mcp-*", "smart-compact*"],
+			exclude: ["pi-lens-lsp", "openai-fast", "mcp", "mcp-*"],
 		},
 	},
 	effort: {

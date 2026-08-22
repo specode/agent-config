@@ -16,18 +16,6 @@
   "compaction": {
     "keepRecentTokens": 40000
   },
-  "smartCompact": {
-    "mode": "balanced",
-    "profiles": {
-      "balanced": {
-        "keepRecentTokens": 40000
-      }
-    },
-    "agentToolAccess": "disabled",
-    "autoTriggerStrategy": "settled",
-    "minContextPercent": 80,
-    "contextGraphEnabled": false
-  },
   "packages": [
     "npm:pi-subagents",
     "npm:pi-web-access",
@@ -37,8 +25,7 @@
     "npm:@specode/pi-kimi-cu",
     "npm:@specode/pi-kimi-webbridge-bootstrap",
     "npm:@diegopetrucci/pi-openai-fast",
-    "npm:pi-antigravity",
-    "npm:pi-smart-compact"
+    "npm:pi-antigravity"
   ],
   "hideThinkingBlock": true,
   "fullscreenScrollbar": "auto",

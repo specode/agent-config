@@ -27,8 +27,7 @@
         "pi-lens-lsp",
         "openai-fast",
         "mcp",
-        "mcp-*",
-        "smart-compact*"
+        "mcp-*"
       ]
     }
   },
