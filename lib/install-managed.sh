@@ -25,6 +25,69 @@ error() {
 	printf "${RED}==>${NC} %s\n" "$1" >&2
 }
 
+installer_uses_summary_output() {
+	[ "${INSTALL_OUTPUT_MODE:-detailed}" = 'summary' ]
+}
+
+record_managed_change() {
+	local changes_log="$1"
+	local change_type="$2"
+	local item_type="$3"
+	local item_name="$4"
+	local fallback_name="$5"
+
+	[ -n "$item_type" ] || item_type='配置'
+	[ -n "$item_name" ] || item_name="$fallback_name"
+	printf '%s|%s|%s\n' "$change_type" "$item_type" "$item_name" >>"$changes_log"
+}
+
+show_managed_change_summary() {
+	local changes_log="$1"
+	local label="$2"
+	local normalized_log="$INSTALL_TEMP_ROOT/normalized-changes.$$"
+	local item_type change_type names
+
+	[ -s "$changes_log" ] || return 0
+
+	LC_ALL=C awk -F '|' '
+		{
+			key = $2 SUBSEP $3
+			if (!(key in seen)) {
+				seen[key] = 1
+				order[++count] = key
+				item_type[key] = $2
+				item_name[key] = $3
+				change_type[key] = $1
+			}
+			if ($1 == "更新") {
+				change_type[key] = $1
+			}
+		}
+		END {
+			for (i = 1; i <= count; i++) {
+				key = order[i]
+				print change_type[key] "|" item_type[key] "|" item_name[key]
+			}
+		}
+	' "$changes_log" >"$normalized_log"
+
+	printf '%s 检测到变更：\n' "$label"
+	for item_type in '插件' '配置'; do
+		for change_type in '新增' '更新'; do
+			names="$(LC_ALL=C awk -F '|' -v change_type="$change_type" -v item_type="$item_type" '
+				$1 == change_type && $2 == item_type {
+					if (names != "") names = names "、"
+					names = names $3
+				}
+				END { print names }
+			' "$normalized_log")"
+			if [ -n "$names" ]; then
+				printf '  %s%s：%s\n' "$change_type" "$item_type" "$names"
+			fi
+		done
+	done
+}
+
 RSYNC_EXCLUDES=(
 	'--exclude=.git/'
 	'--exclude=node_modules/'
@@ -167,10 +230,10 @@ copy_managed_path() {
 stage_group_paths() {
 	local manifest="$1"
 	local staging_root="$2"
-	local repository_path local_path expected_type _expected_mode
+	local repository_path local_path expected_type _expected_mode _item_type _item_name
 
 	mkdir -p "$staging_root" || return 1
-	while IFS='|' read -r repository_path local_path expected_type _expected_mode; do
+	while IFS='|' read -r repository_path local_path expected_type _expected_mode _item_type _item_name; do
 		copy_managed_path \
 			"$AGENT_CONFIG_ROOT/$repository_path" \
 			"$staging_root/$local_path" \
@@ -181,10 +244,10 @@ stage_group_paths() {
 snapshot_existing_paths() {
 	local manifest="$1"
 	local originals_log="$2"
-	local _repository_path local_path _expected_type _expected_mode target_path
+	local _repository_path local_path _expected_type _expected_mode _item_type _item_name target_path
 
 	: >"$originals_log" || return 1
-	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode; do
+	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
 		if [ -e "$target_path" ] || [ -L "$target_path" ]; then
 			printf '%s\n' "$local_path" >>"$originals_log" || return 1
@@ -195,17 +258,19 @@ snapshot_existing_paths() {
 backup_group_paths() {
 	local manifest="$1"
 	local group_id="$2"
-	local _repository_path local_path _expected_type _expected_mode
+	local _repository_path local_path _expected_type _expected_mode _item_type _item_name
 	local target_path backup_path
 
-	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode; do
+	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
 		if [ -e "$target_path" ] || [ -L "$target_path" ]; then
 			backup_path="$BACKUP_ROOT/$group_id/$local_path"
 			mkdir -p "$(dirname "$backup_path")" || return 1
 			mv "$target_path" "$backup_path" || return 1
 			BACKUP_CREATED=1
-			printf '  已备份 %s -> %s\n' "$target_path" "$backup_path"
+			if ! installer_uses_summary_output; then
+				printf '  已备份 %s -> %s\n' "$target_path" "$backup_path"
+			fi
 		fi
 	done <"$manifest"
 }
@@ -213,9 +278,9 @@ backup_group_paths() {
 install_staged_paths() {
 	local manifest="$1"
 	local staging_root="$2"
-	local _repository_path local_path expected_type expected_mode
+	local _repository_path local_path expected_type expected_mode _item_type _item_name
 
-	while IFS='|' read -r _repository_path local_path expected_type expected_mode; do
+	while IFS='|' read -r _repository_path local_path expected_type expected_mode _item_type _item_name; do
 		copy_managed_path \
 			"$staging_root/$local_path" \
 			"$AGENT_CONFIG_INSTALL_HOME/$local_path" \
@@ -233,12 +298,12 @@ rollback_group_paths() {
 	local originals_log="$3"
 	local rollback_mode="$4"
 	local discard_root="$INSTALL_TEMP_ROOT/rollback-discard/$group_id"
-	local _repository_path local_path _expected_type _expected_mode
+	local _repository_path local_path _expected_type _expected_mode _item_type _item_name
 	local target_path backup_path discard_path
 	local had_original backup_exists target_exists
 	local rollback_failed=0
 
-	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode; do
+	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
 		backup_path="$BACKUP_ROOT/$group_id/$local_path"
 		had_original=0
@@ -284,9 +349,11 @@ deploy_group_transaction() {
 	local label="$3"
 	local staging_root="$INSTALL_TEMP_ROOT/staged/$group_id"
 	local originals_log="$INSTALL_TEMP_ROOT/originals.$group_id"
-	local _repository_path local_path _expected_type _expected_mode
+	local _repository_path local_path _expected_type _expected_mode _item_type _item_name
 
-	info "准备 $label 的完整配置集"
+	if ! installer_uses_summary_output; then
+		info "准备 $label 的完整配置集"
+	fi
 	if ! stage_group_paths "$manifest" "$staging_root"; then
 		error "$label 准备失败，本机配置未改变"
 		return 1
@@ -311,21 +378,27 @@ deploy_group_transaction() {
 		return 1
 	fi
 
-	while IFS='|' read -r _repository_path local_path _expected_type _expected_mode; do
-		success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
-	done <"$manifest"
+	if ! installer_uses_summary_output; then
+		while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
+			success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
+		done <"$manifest"
+	fi
 }
 
 install_managed_group() {
 	local group_id="$1"
 	local label="$2"
 	local manifest="$INSTALL_TEMP_ROOT/manifest.$group_id"
-	local repository_path local_path expected_type expected_mode
+	local changes_log="$INSTALL_TEMP_ROOT/changes.$group_id"
+	local repository_path local_path expected_type expected_mode item_type item_name
 	local source_path target_path actual_mode answer
 	local group_missing=0
 	local group_legacy_links=0
 	local group_conflict=0
 
+	# shellcheck disable=SC2034 # Read by summary-mode callers after this function returns.
+	INSTALL_MANAGED_CHANGED=0
+	: >"$changes_log"
 	managed_entries >"$manifest"
 	if [ ! -s "$manifest" ]; then
 		error "$label 没有定义任何托管配置"
@@ -337,25 +410,40 @@ install_managed_group() {
 		return 1
 	fi
 
-	info "比较仓库配置与本机配置"
-	printf '\n%s：\n' "$label"
-	while IFS='|' read -r repository_path local_path expected_type expected_mode; do
+	if installer_uses_summary_output; then
+		info "检查 $label 配置"
+	else
+		info "比较仓库配置与本机配置"
+		printf '\n%s：\n' "$label"
+	fi
+	while IFS='|' read -r repository_path local_path expected_type expected_mode item_type item_name; do
 		source_path="$AGENT_CONFIG_ROOT/$repository_path"
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
 		validate_repository_source "$source_path" "$expected_type"
 
 		if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
-			printf '  [缺失] %s\n' "$target_path"
+			if installer_uses_summary_output; then
+				record_managed_change "$changes_log" '新增' "$item_type" "$item_name" "$local_path"
+			else
+				printf '  [缺失] %s\n' "$target_path"
+			fi
 			group_missing=1
 			continue
 		fi
 
 		if [ -L "$target_path" ]; then
+			if installer_uses_summary_output; then
+				record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+			fi
 			if is_expected_repository_link "$target_path" "$source_path"; then
-				printf '  [旧版仓库软链接] %s\n' "$target_path"
+				if ! installer_uses_summary_output; then
+					printf '  [旧版仓库软链接] %s\n' "$target_path"
+				fi
 				group_legacy_links=1
 			else
-				printf '  [软链接冲突] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
+				if ! installer_uses_summary_output; then
+					printf '  [软链接冲突] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
+				fi
 				group_conflict=1
 			fi
 			continue
@@ -364,42 +452,77 @@ install_managed_group() {
 		case "$expected_type" in
 		file)
 			if [ ! -f "$target_path" ]; then
-				printf '  [类型冲突] 预期为文件：%s\n' "$target_path"
+				if installer_uses_summary_output; then
+					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+				else
+					printf '  [类型冲突] 预期为文件：%s\n' "$target_path"
+				fi
 				group_conflict=1
 			elif cmp -s "$source_path" "$target_path"; then
 				if managed_file_mode_matches "$target_path" "$expected_mode"; then
-					printf '  [一致] %s\n' "$target_path"
+					if ! installer_uses_summary_output; then
+						printf '  [一致] %s\n' "$target_path"
+					fi
 				else
-					actual_mode="$(stat -f '%Lp' "$target_path" 2>/dev/null || stat -c '%a' "$target_path" 2>/dev/null || printf '?')"
-					printf '  [权限漂移] %s（当前 %s，预期 %s）\n' "$target_path" "$actual_mode" "$expected_mode"
+					if installer_uses_summary_output; then
+						record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+					else
+						actual_mode="$(stat -f '%Lp' "$target_path" 2>/dev/null || stat -c '%a' "$target_path" 2>/dev/null || printf '?')"
+						printf '  [权限漂移] %s（当前 %s，预期 %s）\n' "$target_path" "$actual_mode" "$expected_mode"
+					fi
 					group_missing=1
 				fi
 			else
-				printf '  [内容不同] %s\n' "$target_path"
-				show_file_diff "$source_path" "$target_path"
+				if installer_uses_summary_output; then
+					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+				else
+					printf '  [内容不同] %s\n' "$target_path"
+					show_file_diff "$source_path" "$target_path"
+				fi
 				group_conflict=1
 			fi
 			;;
 		directory)
 			if [ ! -d "$target_path" ]; then
-				printf '  [类型冲突] 预期为目录：%s\n' "$target_path"
+				if installer_uses_summary_output; then
+					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+				else
+					printf '  [类型冲突] 预期为目录：%s\n' "$target_path"
+				fi
 				group_conflict=1
 			elif directory_is_equal "$source_path" "$target_path"; then
-				printf '  [一致] %s\n' "$target_path"
+				if ! installer_uses_summary_output; then
+					printf '  [一致] %s\n' "$target_path"
+				fi
 			else
-				printf '  [内容不同] %s\n' "$target_path"
-				show_directory_diff "$source_path" "$target_path"
+				if installer_uses_summary_output; then
+					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+				else
+					printf '  [内容不同] %s\n' "$target_path"
+					show_directory_diff "$source_path" "$target_path"
+				fi
 				group_conflict=1
 			fi
 			;;
 		esac
 	done <"$manifest"
 
-	printf '\n'
+	if installer_uses_summary_output; then
+		show_managed_change_summary "$changes_log" "$label"
+		if [ -s "$changes_log" ]; then
+			printf '\n'
+		fi
+	else
+		printf '\n'
+	fi
 	if [ "$group_conflict" -eq 1 ]; then
-		printf '是否用仓库配置替换 %s 的全部托管路径？\n' "$label"
-		printf '  y = 先备份，再整组覆盖\n'
-		printf '  N = 整组保持不变（包括当前缺失的路径）[y/N] '
+		if installer_uses_summary_output; then
+			printf '是否安装以上变更？现有配置会先备份，再整组更新。[y/N] '
+		else
+			printf '是否用仓库配置替换 %s 的全部托管路径？\n' "$label"
+			printf '  y = 先备份，再整组覆盖\n'
+			printf '  N = 整组保持不变（包括当前缺失的路径）[y/N] '
+		fi
 		if ! IFS= read -r answer; then
 			printf '\n' >&2
 			error "无法读取确认，本机文件未改变"
@@ -415,12 +538,14 @@ install_managed_group() {
 	elif [ "$group_missing" -eq 0 ] && [ "$group_legacy_links" -eq 0 ]; then
 		success "$label 已与仓库一致"
 		return 0
-	else
+	elif ! installer_uses_summary_output; then
 		info "$label 没有本机冲突，将自动安装完整配置集"
 	fi
 
 	deploy_group_transaction "$manifest" "$group_id" "$label"
-	if [ "$BACKUP_CREATED" -eq 1 ]; then
+	# shellcheck disable=SC2034 # Read by summary-mode callers after this function returns.
+	INSTALL_MANAGED_CHANGED=1
+	if [ "$BACKUP_CREATED" -eq 1 ] && ! installer_uses_summary_output; then
 		info "原本机文件保存在 $BACKUP_ROOT"
 	fi
 }

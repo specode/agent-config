@@ -6,6 +6,8 @@ AGENT_CONFIG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/install-managed.sh
 source "$AGENT_CONFIG_ROOT/lib/install-managed.sh"
 
+INSTALL_OUTPUT_MODE='summary'
+
 usage() {
 	cat <<'EOF'
 用法：./install-harness.sh <harness>
@@ -38,26 +40,26 @@ claude-code)
 	HARNESS_LABEL='Claude Code'
 	managed_entries() {
 		printf '%s\n' \
-			'harnesses/claude-code/settings.json|.claude/settings.json|file|-' \
-			'harnesses/claude-code/keybindings.json|.claude/keybindings.json|file|-' \
-			'harnesses/claude-code/statusline-command.sh|.claude/statusline-command.sh|file|-'
+			'harnesses/claude-code/settings.json|.claude/settings.json|file|-|配置|通用设置' \
+			'harnesses/claude-code/keybindings.json|.claude/keybindings.json|file|-|配置|快捷键' \
+			'harnesses/claude-code/statusline-command.sh|.claude/statusline-command.sh|file|-|插件|状态栏'
 	}
 	;;
 pi)
 	HARNESS_LABEL='Pi'
 	managed_entries() {
 		printf '%s\n' \
-			'harnesses/pi/agent/settings.json|.pi/agent/settings.json|file|-' \
-			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-' \
-			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-' \
-			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-' \
-			'harnesses/pi/agent/extensions/last-model-effort|.pi/agent/extensions/last-model-effort|directory|-' \
-			'harnesses/pi/agent/extensions/work-animation.ts|.pi/agent/extensions/work-animation.ts|file|-' \
-			'harnesses/pi/agent/extensions/work-animation.json|.pi/agent/extensions/work-animation.json|file|-' \
-			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-' \
-			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-' \
-			'harnesses/pi/web-search.json|.pi/web-search.json|file|-' \
-			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-'
+			'harnesses/pi/agent/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
+			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
+			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
+			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
+			'harnesses/pi/agent/extensions/last-model-effort|.pi/agent/extensions/last-model-effort|directory|-|插件|last-model-effort' \
+			'harnesses/pi/agent/extensions/work-animation.ts|.pi/agent/extensions/work-animation.ts|file|-|插件|work-animation' \
+			'harnesses/pi/agent/extensions/work-animation.json|.pi/agent/extensions/work-animation.json|file|-|插件|work-animation' \
+			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-|插件|image-gen' \
+			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
+			'harnesses/pi/web-search.json|.pi/web-search.json|file|-|配置|Web Search' \
+			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
 	}
 	;;
 -h | --help)
@@ -72,4 +74,6 @@ pi)
 esac
 
 install_managed_group "$HARNESS_ID" "$HARNESS_LABEL"
-success "$HARNESS_LABEL 配置安装完成"
+if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
+	success "$HARNESS_LABEL 配置安装完成"
+fi
