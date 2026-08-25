@@ -53,6 +53,10 @@
 - `install-rules.sh`：只安装 rules。
 - `install-harness.sh`：只安装指定 harness 的配置。
 
+### Pi last-model-effort
+
+`harnesses/pi/agent/extensions/last-model-effort/` 在新建会话时恢复最近实际使用的模型与 thinking / reasoning effort，同时让 `pi -c`、`/resume`、fork 和显式 CLI 参数保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库。详细行为见 [插件文档](harnesses/pi/agent/extensions/last-model-effort/README.md)。
+
 ### Pi session-ui
 
 `harnesses/pi/agent/extensions/session-ui.ts` 是唯一入口，负责按配置装配
@@ -60,7 +64,7 @@
 
 当前模块包括：
 
-- compact paste：图片显示为 `[Image N]`，长文本显示为 `[Paste N · size]`，提交时仍由 Pi 原生粘贴注册表展开。
+- compact paste：图片显示为 `[Image N]`，长文本显示为 `[Paste N · size]`；光标移入图片占位符时异步读取并缓存终端图片预览，Kitty 协议仅预览 PNG，提交时仍由 Pi 原生粘贴注册表展开。
 - tool activity：临时 widget 投影工具进度，不替换工具执行或正式 transcript renderer。
 - statusline：可配置 segment 顺序、溢出策略和扩展状态过滤；`/statusline` 可切回 Pi 默认 footer。
 - effort：`/effort` 只提供当前模型实际支持的 thinking 档位。

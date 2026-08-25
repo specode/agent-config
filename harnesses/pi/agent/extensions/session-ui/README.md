@@ -8,7 +8,7 @@
 | 配置段 | 默认 | 作用 | 运行边界 |
 | --- | --- | --- | --- |
 | `toolActivity` | 开启 | 在编辑器附近投影本轮工具执行状态 | 仅 TUI；`turn_end` 后清空 |
-| `compactPaste` | 开启 | 缩短图片和长文本的编辑器占位符 | 仅 TUI；不兼容时回退 Pi 原生编辑器 |
+| `compactPaste` | 开启 | 缩短图片和长文本占位符；光标移入图片占位符时显示预览 | 仅 TUI；需终端图片能力；不兼容时回退 Pi 原生编辑器 |
 | `statusline` | 开启 | 用可组合 segments 替换默认 footer | 仅有 UI 的会话；可用 `/statusline` 临时切换 |
 | `effort` | 开启 | 用 `/effort` 查看或调整模型支持的 thinking 档位 | 选择面板仅 TUI；非 TUI 需显式传档位 |
 | `turnDuration` | 开启 | 在 transcript 中追加 turn 耗时 entry | 仅 TUI；不会发送给模型 |
@@ -50,6 +50,12 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `uiMeta.sessionName.manualNameLocks` | boolean | 用户手工 `/name` 后是否阻止后续自动覆盖；默认开启 |
 
 配置文件只在扩展加载时读取；修改后使用 `/reload` 或重新启动 Pi。
+
+## 图片预览
+
+启用 `compactPaste` 后，粘贴图片仍以 `[Image N]` 占位，不改变 Pi 原生 paste registry 和提交展开行为。光标进入图片占位符时，会在标签上方显示不抢占输入焦点的预览 Overlay；移出占位符后自动隐藏。
+
+预览仅在终端报告图片能力时启用。Kitty 协议当前只预览 PNG，避免 pi-tui 把 JPEG、WebP、GIF 原始字节错误声明为 PNG；iTerm2 协议支持 PNG、JPEG、WebP 和 GIF。图片在首次进入占位符时异步读取，最多缓存最近 4 张，避免阻塞输入或重复读取。展示大小按图片原始像素与终端 cell 尺寸计算，不主动放大，并限制为屏幕宽度的 90%、高度的 75%；终端过窄、标签不在可见区域或图片无法读取时保持隐藏。定位逻辑对 Pi regular/fullscreen 最近渲染帧使用运行时守卫，关键内部字段变化时会触发一次兼容性 warning，禁用受影响的增强功能，并继续保留 Pi 原生提交行为。
 
 ## Statusline segments
 
@@ -111,6 +117,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 ```bash
 node --test \
+  harnesses/pi/agent/extensions/session-ui/compact-paste.test.ts \
   harnesses/pi/agent/extensions/session-ui/statusline-core.test.ts \
   harnesses/pi/agent/extensions/session-ui/ui-meta-core.test.ts
 ```
@@ -123,4 +130,4 @@ pi --no-extensions --offline \
   --list-models grok-4.6
 ```
 
-测试覆盖 statusline 核心布局、glob 过滤、未知 segment、MCP status 解码，以及 UI Meta 解析、清理、截断和流式隐藏；`/effort` 交互、工具并发投影、真实 TUI footer、真实模型协议遵循度、自动/手工 session 名称切换、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。
+测试覆盖 compact paste 的图片路径、MIME/协议边界、大小格式和 marker 间距，statusline 核心布局、glob 过滤、未知 segment、MCP status 解码，以及 UI Meta 解析、清理、截断和流式隐藏；图片 Overlay 的真实终端绘制、`/effort` 交互、工具并发投影、真实 TUI footer、真实模型协议遵循度、自动/手工 session 名称切换、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。

@@ -1,47 +1,24 @@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import type {
-	ExtensionAPI,
-	ExtensionContext,
+import {
+	parseArgs,
+	type ExtensionAPI,
+	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-type ThinkingLevel =
-	| "off"
-	| "minimal"
-	| "low"
-	| "medium"
-	| "high"
-	| "xhigh"
-	| "max";
-
-const ALL_LEVELS: ThinkingLevel[] = [
-	"off",
-	"minimal",
-	"low",
-	"medium",
-	"high",
-	"xhigh",
-	"max",
-];
-
-const DESCRIPTIONS: Record<ThinkingLevel, string> = {
-	off: "关闭推理",
-	minimal: "极简推理",
-	low: "轻度推理",
-	medium: "中等推理",
-	high: "深度推理",
-	xhigh: "超高推理",
-	max: "最大推理",
-};
+type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 
 function isThinkingLevel(value: string): value is ThinkingLevel {
-	return (ALL_LEVELS as string[]).includes(value);
+	return parseArgs(["--thinking", value]).thinking === value;
 }
 
-function availableLevels(ctx: ExtensionContext): ThinkingLevel[] {
+function availableLevels(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+): ThinkingLevel[] {
 	return ctx.model
-		? (getSupportedThinkingLevels(ctx.model) as ThinkingLevel[])
-		: ALL_LEVELS;
+		? getSupportedThinkingLevels(ctx.model)
+		: [pi.getThinkingLevel()];
 }
 
 function modelLabel(ctx: ExtensionContext): string {
@@ -211,50 +188,53 @@ function applyLevel(
 	ctx: ExtensionContext,
 	level: ThinkingLevel,
 ): void {
-	const before = pi.getThinkingLevel() as ThinkingLevel;
-	const levels = availableLevels(ctx);
+	const before = pi.getThinkingLevel();
+	const levels = availableLevels(pi, ctx);
 	if (!levels.includes(level)) {
 		ctx.ui.notify(
-			`当前模型不支持 "${level}"。可用: ${levels.join(", ")}`,
+			`The current model does not support "${level}". Available: ${levels.join(", ")}`,
 			"warning",
 		);
 		return;
 	}
 	pi.setThinkingLevel(level);
-	const after = pi.getThinkingLevel() as ThinkingLevel;
+	const after = pi.getThinkingLevel();
 	if (after === before) {
-		ctx.ui.notify(`effort 已是 ${after}`, "info");
+		ctx.ui.notify(`Effort is already ${after}`, "info");
 	} else if (after === level) {
 		ctx.ui.notify(`effort ${before} → ${after}`, "info");
 	} else {
 		ctx.ui.notify(
-			`effort ${before} → ${after}（请求 ${level}，已按模型能力调整）`,
+			`Effort ${before} → ${after} (requested ${level}; adjusted to model capabilities)`,
 			"info",
 		);
 	}
 }
 
 export function registerEffort(pi: ExtensionAPI): void {
+	let completionLevels: ThinkingLevel[] = [];
+
+	pi.on("session_start", (_event, ctx) => {
+		completionLevels = availableLevels(pi, ctx);
+	});
+	pi.on("model_select", (event) => {
+		completionLevels = getSupportedThinkingLevels(event.model);
+	});
+
 	pi.registerCommand("effort", {
-		description: "调节 thinking / reasoning 强度（effort）",
+		description: "Adjust thinking / reasoning effort",
 		getArgumentCompletions(prefix) {
 			const raw = prefix.trim().toLowerCase();
-			const options = [...ALL_LEVELS, "status", "show", "current"];
+			const options = [...completionLevels, "status", "show", "current"];
 			const matched = options.filter((item) => item.startsWith(raw));
 			return matched.length > 0
-				? matched.map((item) => ({
-						value: item,
-						label: item,
-						description: isThinkingLevel(item)
-							? DESCRIPTIONS[item]
-							: "显示当前 effort",
-					}))
+				? matched.map((item) => ({ value: item, label: item }))
 				: null;
 		},
 		handler: async (args, ctx) => {
 			const arg = args.trim().toLowerCase();
-			const current = pi.getThinkingLevel() as ThinkingLevel;
-			const levels = availableLevels(ctx);
+			const current = pi.getThinkingLevel();
+			const levels = availableLevels(pi, ctx);
 			if (arg === "status" || arg === "show" || arg === "current") {
 				ctx.ui.notify(
 					`${modelLabel(ctx)}  effort=${current}  [${levels.join(", ")}]`,
@@ -273,7 +253,7 @@ export function registerEffort(pi: ExtensionAPI): void {
 			}
 			if (!isThinkingLevel(arg)) {
 				ctx.ui.notify(
-					`未知 effort: "${arg}"。可用: ${levels.join(", ")} 或 status`,
+					`Unknown effort: "${arg}". Available: ${levels.join(", ")} or status`,
 					"warning",
 				);
 				return;

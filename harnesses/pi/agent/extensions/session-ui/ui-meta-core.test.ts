@@ -37,22 +37,22 @@ test("commits recap only for a successful tool-free final response", () => {
 
 test("extracts typed start and end records", () => {
 	const text = [
-		'<ui_meta>{"v":1,"kind":"turn_start","title":"设计元数据协议","session":{"action":"set","name":"优化会话标题体验"}}</ui_meta>',
+		'<ui_meta>{"v":1,"kind":"turn_start","title":"Meta design","session":{"action":"set","name":"Session titles"}}</ui_meta>',
 		"normal response",
-		'<ui_meta>{"v":1,"kind":"turn_end","recap":"完成协议设计并拆分三个消费端"}</ui_meta>',
+		'<ui_meta>{"v":1,"kind":"turn_end","recap":"Designed protocol and split consumers"}</ui_meta>',
 	].join("\n");
 
 	assert.deepEqual(extractUiMetaRecords(text, limits), [
 		{
 			v: 1,
 			kind: "turn_start",
-			title: "设计元数据协议",
-			session: { action: "set", name: "优化会话标题体验" },
+			title: "Meta design",
+			session: { action: "set", name: "Session titles" },
 		},
 		{
 			v: 1,
 			kind: "turn_end",
-			recap: "完成协议设计并拆分三个消费端",
+			recap: "Designed protocol and split consumers",
 		},
 	]);
 });
@@ -72,37 +72,40 @@ test("accepts keep and ignores malformed or unsupported records", () => {
 
 test("ignores valid-looking metadata examples away from protocol boundaries", () => {
 	const example =
-		'正文中的示例 <ui_meta>{"v":1,"kind":"turn_start","title":"不要应用"}</ui_meta> 仍属于正文';
+		'Inline example <ui_meta>{"v":1,"kind":"turn_start","title":"Do not apply"}</ui_meta> remains body text';
 	assert.deepEqual(extractUiMetaRecords(example, limits), []);
 	assert.equal(stripUiMetaBlocks(example), example);
 });
 
 test("sanitizes controls, bidi overrides, whitespace, and visible length", () => {
 	assert.equal(
-		sanitizeUiMetaText("  修复\u001B]0;owned\u0007\n登录\u202E状态和缓存  ", 8),
-		"修复 登录状态…",
+		sanitizeUiMetaText("  Fix\u001B]0;owned\u0007\nlogin\u202E state cache  ", 8),
+		"Fix log…",
 	);
 	assert.equal(sanitizeUiMetaText("abcdef", 4), "abc…");
 });
 
 test("strips complete metadata without removing the normal response", () => {
 	const markdown = [
-		'<ui_meta>{"v":1,"kind":"turn_start","title":"测试"}</ui_meta>',
+		'<ui_meta>{"v":1,"kind":"turn_start","title":"Test"}</ui_meta>',
 		"",
-		"正常回答",
+		"Normal response",
 		"",
-		'<ui_meta>{"v":1,"kind":"turn_end","recap":"完成"}</ui_meta>',
+		'<ui_meta>{"v":1,"kind":"turn_end","recap":"Done"}</ui_meta>',
 	].join("\n");
-	assert.equal(stripUiMetaBlocks(markdown), "正常回答");
+	assert.equal(stripUiMetaBlocks(markdown), "Normal response");
 });
 
 test("hides unfinished metadata and split tag prefixes only when requested", () => {
-	assert.equal(stripUiMetaBlocks('正常回答\n<ui_meta>{"v":1', true), "正常回答");
+	assert.equal(
+		stripUiMetaBlocks('Normal response\n<ui_meta>{"v":1', true),
+		"Normal response",
+	);
 	assert.equal(stripUiMetaBlocks("", true), "");
 	assert.equal(stripUiMetaBlocks("<ui_", true), "");
 	assert.equal(
-		stripUiMetaBlocks('正常回答\n<ui_meta>{"v":1', false),
-		'正常回答\n<ui_meta>{"v":1',
+		stripUiMetaBlocks('Normal response\n<ui_meta>{"v":1', false),
+		'Normal response\n<ui_meta>{"v":1',
 	);
-	assert.equal(stripUiMetaBlocks("比较结果是 1 < 2", true), "比较结果是 1 < 2");
+	assert.equal(stripUiMetaBlocks("Result is 1 < 2", true), "Result is 1 < 2");
 });

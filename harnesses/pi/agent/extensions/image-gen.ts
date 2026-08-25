@@ -12,7 +12,7 @@
  * Optional tool params still override: provider, model, aspectRatio, n, save.
  *
  * Usage:
- *   "生成一只金毛"
+ *   "Generate a golden retriever"
  *   /img a golden retriever
  *
  * Save (tool param or env only — no config file):
@@ -106,8 +106,7 @@ const TOOL_PARAMS = Type.Object({
 	save: Type.Optional(StringEnum(SAVE_MODES)),
 	saveDir: Type.Optional(
 		Type.String({
-			description:
-				"Directory when save=custom. Falls back to PI_IMAGE_SAVE_DIR.",
+			description: "Directory when save=custom. Falls back to PI_IMAGE_SAVE_DIR.",
 		}),
 	),
 });
@@ -348,7 +347,8 @@ function rateLimitHint(response: Response): string {
 	const resetMs = parseRetryAfterMs(response);
 	const parts: string[] = [];
 	if (remaining !== null) parts.push(`remaining=${remaining}`);
-	if (resetMs !== undefined) parts.push(`resets in ~${Math.ceil(resetMs / 1000)}s`);
+	if (resetMs !== undefined)
+		parts.push(`resets in ~${Math.ceil(resetMs / 1000)}s`);
 	return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
@@ -552,9 +552,7 @@ export default function imageGen(pi: ExtensionAPI) {
 						);
 						savedPaths.push(path);
 					} catch (error) {
-						saveErrors.push(
-							error instanceof Error ? error.message : String(error),
-						);
+						saveErrors.push(error instanceof Error ? error.message : String(error));
 					}
 				}
 				content.push({
@@ -607,7 +605,7 @@ export default function imageGen(pi: ExtensionAPI) {
 				return;
 			}
 			await pi.sendUserMessage(
-				`请用 generate_image 生成图片，prompt：${prompt}`,
+				`Use generate_image to create an image with this prompt: ${prompt}`,
 			);
 		},
 	});

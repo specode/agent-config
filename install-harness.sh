@@ -51,6 +51,7 @@ pi)
 			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-' \
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-' \
+			'harnesses/pi/agent/extensions/last-model-effort|.pi/agent/extensions/last-model-effort|directory|-' \
 			'harnesses/pi/agent/extensions/work-animation.ts|.pi/agent/extensions/work-animation.ts|file|-' \
 			'harnesses/pi/agent/extensions/work-animation.json|.pi/agent/extensions/work-animation.json|file|-' \
 			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-' \
