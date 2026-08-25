@@ -1,5 +1,5 @@
 {
-  "theme": "light/light",
+  "theme": "light/dark",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
     "xai/grok-4.6",
