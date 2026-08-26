@@ -1,34 +1,35 @@
 {
-  "theme": "light/dark",
-  "enabledModels": [
-    "openai-codex/gpt-5.6-sol",
-    "xai/grok-4.6",
-    "antigravity/gemini-3.7-flash",
-    "deepseek/deepseek-v4-flash",
-    "deepseek/deepseek-v4-pro"
-  ],
-  "externalEditor": "nvim",
-  "collapseChangelog": true,
-  "showHardwareCursor": true,
-  "autocompleteMaxVisible": 8,
-  "steeringMode": "one-at-a-time",
-  "followUpMode": "one-at-a-time",
-  "compaction": {
-    "keepRecentTokens": 40000
-  },
-  "packages": [
-    "npm:pi-subagents",
-    "npm:pi-web-access",
-    "npm:@juicesharp/rpiv-ask-user-question",
-    "npm:pi-lens",
-    "npm:pi-mcp-adapter",
-    "npm:@specode/pi-kimi-cu",
-    "npm:@specode/pi-kimi-webbridge-bootstrap",
-    "npm:@diegopetrucci/pi-openai-fast",
-    "npm:pi-antigravity"
-  ],
-  "hideThinkingBlock": true,
-  "fullscreenScrollbar": "auto",
-  "tuiMode": "fullscreen",
-  "treeFilterMode": "no-tools"
+	"theme": "light/dark",
+	"enabledModels": [
+		"openai-codex/gpt-5.6-sol",
+		"kimi-coding/k3",
+		"xai/grok-4.6",
+		"antigravity/gemini-3.7-flash",
+		"deepseek/deepseek-v4-flash",
+		"deepseek/deepseek-v4-pro"
+	],
+	"externalEditor": "nvim",
+	"collapseChangelog": true,
+	"showHardwareCursor": true,
+	"autocompleteMaxVisible": 8,
+	"steeringMode": "one-at-a-time",
+	"followUpMode": "one-at-a-time",
+	"compaction": {
+		"keepRecentTokens": 40000
+	},
+	"packages": [
+		"npm:pi-subagents",
+		"npm:pi-web-access",
+		"npm:@juicesharp/rpiv-ask-user-question",
+		"npm:pi-lens",
+		"npm:pi-mcp-adapter",
+		"npm:@specode/pi-kimi-cu",
+		"npm:@specode/pi-kimi-webbridge-bootstrap",
+		"npm:@diegopetrucci/pi-openai-fast",
+		"npm:pi-antigravity"
+	],
+	"hideThinkingBlock": true,
+	"fullscreenScrollbar": "auto",
+	"tuiMode": "fullscreen",
+	"treeFilterMode": "no-tools"
 }
