@@ -11,6 +11,7 @@
 - 模型不可用或认证失效时保留 Pi 当前选择，并显示警告。
 - effort 会通过 Pi 原生 `setThinkingLevel()` 按当前模型能力自动收敛。
 - 该行为适用于 Pi 的 TUI、RPC、JSON 和 print 新会话；显式 CLI 参数仍具有最高优先级。
+- `PI_SUBAGENT_CHILD=1` 的 Pi 子 Agent 不参与恢复或持久化，避免其固定 effort（如 reviewer 的 `high`）污染主会话的最近选择。
 
 插件监听 `model_select` 和 `thinking_level_select`，把最近状态原子写入；恢复阶段产生但被其他扩展延迟的 thinking 事件会被识别并忽略，避免覆盖仍应保留的历史模型：
 

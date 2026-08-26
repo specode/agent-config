@@ -10,6 +10,7 @@ import {
 	hasModelThinkingSuffix,
 	parseLastModelEffortState,
 	RestoreThinkingEventGate,
+	shouldManageLastSelection,
 	shouldRestoreLastSelection,
 	type LastModelEffortState,
 	type ThinkingLevel,
@@ -122,6 +123,8 @@ function warn(ctx: ExtensionContext, message: string): void {
 }
 
 export default function lastModelEffort(pi: ExtensionAPI): void {
+	if (!shouldManageLastSelection(process.env.PI_SUBAGENT_CHILD)) return;
+
 	const statePath = getStatePath();
 	const restoreThinkingEvents = new RestoreThinkingEventGate();
 	let writeQueue = Promise.resolve();

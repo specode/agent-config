@@ -64,6 +64,12 @@ export class RestoreThinkingEventGate {
 
 export type SessionStartReason = SessionStartEvent["reason"];
 
+export function shouldManageLastSelection(
+	subagentChildMarker: string | undefined,
+): boolean {
+	return subagentChildMarker !== "1";
+}
+
 export function parseLastModelEffortState(
 	value: unknown,
 	isThinkingLevel: ThinkingLevelGuard,

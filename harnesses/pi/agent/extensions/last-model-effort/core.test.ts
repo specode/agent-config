@@ -4,6 +4,7 @@ import {
 	hasModelThinkingSuffix,
 	parseLastModelEffortState,
 	RestoreThinkingEventGate,
+	shouldManageLastSelection,
 	shouldRestoreLastSelection,
 	type ThinkingLevel,
 } from "./core.ts";
@@ -66,6 +67,12 @@ test("detects a system thinking suffix on a model argument", () => {
 		hasModelThinkingSuffix("ollama/model:custom", isTestThinkingLevel),
 		false,
 	);
+});
+
+test("ignores pi-subagents child processes", () => {
+	assert.equal(shouldManageLastSelection("1"), false);
+	assert.equal(shouldManageLastSelection("0"), true);
+	assert.equal(shouldManageLastSelection(undefined), true);
 });
 
 test("restores only into fresh startup or explicitly new sessions", () => {
