@@ -1,5 +1,7 @@
-export const UI_META_OPEN_TAG = "<ui_meta>";
-export const UI_META_CLOSE_TAG = "</ui_meta>";
+export const UI_META_SENTINEL = "@@PI_UI_META_V1@@";
+const LEGACY_UI_META_OPEN_TAG = "<ui_meta>";
+const LEGACY_UI_META_CLOSE_TAG = "</ui_meta>";
+const LEGACY_UI_META_BROKEN_CLOSE = "_meta>";
 
 export interface UiMetaLimits {
 	title: number;
@@ -118,35 +120,72 @@ function parseRecord(
 	return undefined;
 }
 
+function protocolBody(line: string): string | undefined {
+	const candidate = line.trim();
+	if (candidate.startsWith(UI_META_SENTINEL)) {
+		return candidate.slice(UI_META_SENTINEL.length).trim();
+	}
+	if (!candidate.startsWith(LEGACY_UI_META_OPEN_TAG)) return undefined;
+
+	let body = candidate.slice(LEGACY_UI_META_OPEN_TAG.length).trim();
+	if (body.endsWith(LEGACY_UI_META_CLOSE_TAG)) {
+		body = body.slice(0, -LEGACY_UI_META_CLOSE_TAG.length).trim();
+	} else if (body.endsWith(LEGACY_UI_META_BROKEN_CLOSE)) {
+		body = body.slice(0, -LEGACY_UI_META_BROKEN_CLOSE.length).trim();
+	}
+	return body;
+}
+
+function parseProtocolLine(
+	line: string,
+	limits: UiMetaLimits,
+): UiMetaRecord | undefined {
+	const body = protocolBody(line);
+	if (!body || body.length > 4_096) return undefined;
+	try {
+		return parseRecord(JSON.parse(body) as unknown, limits);
+	} catch {
+		// The metadata channel is best-effort; malformed model output stays non-fatal.
+		return undefined;
+	}
+}
+
+function boundaryLineIndexes(lines: string[]): number[] {
+	let first = 0;
+	while (first < lines.length && !lines[first]?.trim()) first++;
+	if (first >= lines.length) return [];
+
+	let last = lines.length - 1;
+	while (last > first && !lines[last]?.trim()) last--;
+	return first === last ? [first] : [first, last];
+}
+
 /**
- * Parse valid protocol records only at their required message boundaries:
- * turn_start at the beginning and turn_end at the end. Code examples in the
- * normal response are therefore not mistaken for application metadata.
+ * Parse one-line protocol records only at their required message boundaries:
+ * turn_start at the beginning and turn_end at the end. The legacy XML-shaped
+ * format remains readable so in-flight and restored sessions stay compatible.
  */
 export function extractUiMetaRecords(
 	text: string,
 	limits: UiMetaLimits,
 ): UiMetaRecord[] {
+	const lines = text.split(/\r?\n/);
+	const indexes = boundaryLineIndexes(lines);
 	const records: UiMetaRecord[] = [];
-	for (const match of text.matchAll(/<ui_meta>\s*([\s\S]*?)\s*<\/ui_meta>/g)) {
-		const body = match[1];
-		const index = match.index ?? -1;
-		if (!body || body.length > 4_096 || index < 0) continue;
-		try {
-			const record = parseRecord(JSON.parse(body) as unknown, limits);
-			if (!record) continue;
-			const before = text.slice(0, index).trim();
-			const after = text.slice(index + match[0].length).trim();
-			if (record.kind === "turn_start" && before === "") records.push(record);
-			if (record.kind === "turn_end" && after === "") records.push(record);
-		} catch {
-			// The metadata channel is best-effort; malformed model output stays non-fatal.
+	for (const [position, index] of indexes.entries()) {
+		const line = lines[index];
+		if (line === undefined) continue;
+		const record = parseProtocolLine(line, limits);
+		if (!record) continue;
+		if (record.kind === "turn_start" && position === 0) records.push(record);
+		if (record.kind === "turn_end" && index === indexes.at(-1)) {
+			records.push(record);
 		}
 	}
 	return records;
 }
 
-function stripCompleteBoundaryBlocks(text: string): string {
+function stripCompleteLegacyBoundaryBlocks(text: string): string {
 	let output = text;
 	let previous = "";
 	while (output !== previous) {
@@ -164,29 +203,59 @@ function stripCompleteBoundaryBlocks(text: string): string {
 	return output;
 }
 
-function stripTrailingProtocolPrefix(text: string): string {
-	const lineStart = text.lastIndexOf("\n") + 1;
-	const line = text.slice(lineStart);
+function isProtocolBoundaryLine(
+	line: string,
+	hideIncomplete: boolean,
+): boolean {
 	const candidate = line.trimStart();
-	if (
-		candidate.startsWith(UI_META_OPEN_TAG) ||
-		(candidate.startsWith("<") && UI_META_OPEN_TAG.startsWith(candidate))
-	) {
-		return text.slice(0, lineStart).replace(/\r?\n$/, "");
+	if (!candidate) return false;
+	for (const marker of [UI_META_SENTINEL, LEGACY_UI_META_OPEN_TAG]) {
+		if (candidate.startsWith(marker)) return true;
+		if (hideIncomplete && marker.startsWith(candidate)) return true;
 	}
-	return text;
+	return false;
+}
+
+function stripProtocolBoundaryLines(
+	text: string,
+	hideIncomplete: boolean,
+): string {
+	const lines = text.split(/\r?\n/);
+	while (true) {
+		const indexes = boundaryLineIndexes(lines);
+		const first = indexes[0];
+		if (
+			first === undefined ||
+			!isProtocolBoundaryLine(lines[first] ?? "", hideIncomplete)
+		)
+			break;
+		lines.splice(first, 1);
+	}
+	while (true) {
+		const indexes = boundaryLineIndexes(lines);
+		const last = indexes.at(-1);
+		if (
+			last === undefined ||
+			!isProtocolBoundaryLine(lines[last] ?? "", hideIncomplete)
+		)
+			break;
+		lines.splice(last, 1);
+	}
+	return lines.join("\n");
 }
 
 /**
- * Hide boundary metadata blocks. When hideIncomplete is true, also remove a
- * truncated boundary block so abort/error messages cannot persist protocol text.
+ * Hide reserved boundary metadata lines. Streaming cleanup also hides a split
+ * marker prefix; final cleanup removes malformed records before persistence.
  */
 export function stripUiMetaBlocks(
 	text: string,
 	hideIncomplete = false,
 ): string {
-	let output = stripCompleteBoundaryBlocks(text);
-	if (hideIncomplete) output = stripTrailingProtocolPrefix(output);
+	const output = stripProtocolBoundaryLines(
+		stripCompleteLegacyBoundaryBlocks(text),
+		hideIncomplete,
+	);
 	return output
 		.replace(/^[\t ]*(?:\r?\n)+/, "")
 		.replace(/(?:\r?\n)+[\t ]*$/, "");

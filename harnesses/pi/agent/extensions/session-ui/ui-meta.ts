@@ -12,6 +12,7 @@ import {
 	canCommitUiMetaRecap,
 	extractUiMetaRecords,
 	stripUiMetaBlocks,
+	UI_META_SENTINEL,
 	type UiMetaLimits,
 	type UiMetaRecord,
 } from "./ui-meta-core.ts";
@@ -134,7 +135,7 @@ The application may append a <ui_meta_request> JSON marker to the latest user me
 When the marker is present:
 ${
 	startEnabled
-		? `- If needStart is true, begin the first assistant message with exactly one raw <ui_meta>{JSON}</ui_meta> block before prose or tool calls.
+		? `- If needStart is true, begin the first assistant message with exactly one raw single-line ${UI_META_SENTINEL}{JSON} record before prose or tool calls.
 - The start JSON schema is {"v":1,"kind":"turn_start","title":"...","session":{"action":"keep"}} or {"v":1,"kind":"turn_start","title":"...","session":{"action":"set","name":"..."}}.
 - title describes the immediate action for the latest user turn (what is being done now), not the whole conversation. Maximum ${config.title.maxLength} visible characters.${config.title.enabled ? "" : " Omit title because title metadata is disabled."}
 - session.name describes the current high-level goal of the whole session. Use session.action=set only for the first clear goal or when the user replaces it with a different high-level goal. Use keep for continuations, refinements, tests, reviews, or subtasks.${config.sessionName.enabled ? ` Maximum ${config.sessionName.maxLength} visible characters.` : " Omit session because session-name metadata is disabled."}`
@@ -142,11 +143,12 @@ ${
 }
 ${
 	config.recap.enabled
-		? `- In the final assistant message that completes the request and contains no tool calls, end with exactly one raw <ui_meta>{"v":1,"kind":"turn_end","recap":"..."}</ui_meta> block.
+		? `- In the final assistant message that completes the request and contains no tool calls, end with exactly one raw single-line ${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"..."} record.
 - recap states what was actually completed, partially completed, or blocked in this agent run. It is an outcome, not a plan. Maximum ${config.recap.maxLength} visible characters.`
 		: "- Do not emit turn_end metadata because recap metadata is disabled."
 }
-- Emit raw tags without Markdown fences, quotes around the block, or explanation. Use the same language as the latest real user request and omit trailing punctuation.
+- Put each metadata record on its own physical line. The sentinel is the complete envelope; do not add XML tags, a closing marker, Markdown fences, quotes around the record, or an explanation.
+- Use the same language as the latest real user request and omit trailing punctuation.
 - Do not copy secrets, credentials, full paths, terminal control sequences, or raw user text into metadata.
 - If sessionNameLocked is true, session.action must be keep.
 - needStart and needRecap are fixed for the whole agent run. Emit turn_start only in the first assistant message after the latest real user request; do not repeat it after tool results. Emit turn_end only in the final tool-free response.

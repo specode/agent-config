@@ -63,6 +63,7 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 			"directory",
 			"branch",
 			"context",
+			"usage",
 			"tokens",
 			"cache",
 			"cost",
@@ -70,7 +71,13 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 			"extensions",
 		],
 		extensionStatuses: {
-			exclude: ["pi-lens-lsp", "openai-fast", "mcp", "mcp-*"],
+			exclude: [
+				"pi-lens-lsp",
+				"openai-fast",
+				"mcp",
+				"mcp-*",
+				"subscription-usage",
+			],
 		},
 	},
 	effort: {

@@ -7,6 +7,7 @@ import {
 	matchesStatusPattern,
 	parseMcpFooterText,
 	parseMcpStatusEvent,
+	parseSubscriptionUsageEvent,
 	type StatuslineLayoutItem,
 } from "./statusline-core.ts";
 
@@ -111,4 +112,43 @@ test("MCP event parsing prefers structured connected server data", () => {
 		},
 	);
 	assert.equal(parseMcpStatusEvent({ servers: [] }), undefined);
+});
+
+test("subscription usage event is decoded and sorted by canonical window", () => {
+	const view = parseSubscriptionUsageEvent({
+		v: 1,
+		status: "ready",
+		providerId: "any-provider",
+		capturedAt: 123,
+		windows: [
+			{
+				kind: "monthly",
+				label: "1m",
+				remainingPercent: 60,
+				windowMinutes: 43_200,
+			},
+			{
+				kind: "weekly",
+				label: "1w",
+				remainingPercent: 70,
+				windowMinutes: 10_080,
+			},
+			{
+				kind: "hourly",
+				label: "5h",
+				remainingPercent: 80,
+				windowMinutes: 300,
+				resetsAt: 1_800_000_000,
+			},
+		],
+	});
+	assert.deepEqual(
+		view?.windows.map((window) => window.label),
+		["5h", "1w", "1m"],
+	);
+	assert.equal(view?.windows[0]?.resetsAt, 1_800_000_000);
+	assert.equal(
+		parseSubscriptionUsageEvent({ v: 1, status: "unavailable" }),
+		undefined,
+	);
 });

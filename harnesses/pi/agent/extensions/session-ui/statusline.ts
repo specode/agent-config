@@ -3,6 +3,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	Theme,
+	ThemeColor,
 } from "@earendil-works/pi-coding-agent";
 import { basename } from "node:path";
 import { homedir } from "node:os";
@@ -14,8 +15,11 @@ import {
 	isExtensionStatusExcluded,
 	parseMcpFooterText,
 	parseMcpStatusEvent,
+	parseSubscriptionUsageEvent,
 	type McpStatusView,
 	type StatuslineOverflow,
+	type SubscriptionUsageView,
+	type SubscriptionUsageWindowKind,
 } from "./statusline-core.ts";
 import {
 	ellipsize,
@@ -36,7 +40,13 @@ const I_TOKENS = "\uF1C9";
 const I_CACHE = "\uF49B";
 const I_COST = "\uF155";
 const I_MCP = "\uF1E6";
+const I_USAGE_HOURLY = "\uF017";
+const I_USAGE_WEEKLY = "\uF073";
+const I_USAGE_MONTHLY = "\uF133";
+const I_USAGE_ROLLING = "\uF01E";
+const I_USAGE_QUOTA = "\uF0E4";
 const I_SEP = "\uE0B1";
+const SUBSCRIPTION_USAGE_EVENT = "subscription-usage/status/v1";
 const REGISTER_SEGMENT_EVENT = "session-ui/statusline/register/v1";
 
 interface FooterData {
@@ -73,6 +83,20 @@ function isUsingSubscription(ctx: ExtensionContext): boolean {
 		ctx.modelRegistry.getProvider(model.provider)?.auth.oauth?.isSubscription ===
 			true
 	);
+}
+
+function remainingUsageColor(percent: number): ThemeColor {
+	if (percent >= 50) return "success";
+	if (percent >= 25) return "warning";
+	return "error";
+}
+
+function usageWindowIcon(kind: SubscriptionUsageWindowKind): string {
+	if (kind === "hourly") return I_USAGE_HOURLY;
+	if (kind === "weekly") return I_USAGE_WEEKLY;
+	if (kind === "monthly") return I_USAGE_MONTHLY;
+	if (kind === "rolling") return I_USAGE_ROLLING;
+	return I_USAGE_QUOTA;
 }
 
 export interface StatusSegmentValue {
@@ -228,6 +252,7 @@ export function layoutStatusSegments(
 function registerBuiltInSegments(
 	registry: StatusSegmentRegistry,
 	getMcpFromEvent: () => McpStatusView | undefined,
+	getUsageFromEvent: () => SubscriptionUsageView | undefined,
 	excludedExtensionStatuses: readonly string[],
 ): void {
 	registry.register({
@@ -328,6 +353,26 @@ function registerBuiltInSegments(
 				),
 				compact: segment(theme, "success", I_CTX, colored),
 			};
+		},
+	});
+
+	registry.register({
+		id: "usage",
+		priority: 90,
+		render: ({ theme }) => {
+			const usage = getUsageFromEvent();
+			if (!usage) return undefined;
+			const value = usage.windows
+				.map((window) => {
+					const icon = theme.fg("accent", usageWindowIcon(window.kind));
+					const percent = theme.fg(
+						remainingUsageColor(window.remainingPercent),
+						theme.bold(`${Math.round(window.remainingPercent)}%`),
+					);
+					return `${icon} ${window.label} ${percent}`;
+				})
+				.join("  ");
+			return value ? { full: value } : undefined;
 		},
 	});
 
@@ -434,14 +479,21 @@ export function registerStatusline(
 	let requestRender: (() => void) | undefined;
 	let statsCache: { length: number; stats: Stats } | undefined;
 	let mcpFromEvent: McpStatusView | undefined;
+	let usageFromEvent: SubscriptionUsageView | undefined;
 	registerBuiltInSegments(
 		registry,
 		() => mcpFromEvent,
+		() => usageFromEvent,
 		config.extensionStatuses.exclude,
 	);
 
 	pi.events.on("pi-mcp-adapter/status/v1", (data) => {
 		mcpFromEvent = parseMcpStatusEvent(data);
+		requestRender?.();
+	});
+
+	pi.events.on(SUBSCRIPTION_USAGE_EVENT, (data) => {
+		usageFromEvent = parseSubscriptionUsageEvent(data);
 		requestRender?.();
 	});
 
@@ -509,6 +561,7 @@ export function registerStatusline(
 	pi.on("session_start", (_event, ctx) => {
 		statsCache = undefined;
 		mcpFromEvent = undefined;
+		usageFromEvent = undefined;
 		const unknownSegments = findUnknownStatusSegments(
 			config.segments,
 			registry.ids(),

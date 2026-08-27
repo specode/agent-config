@@ -16,6 +16,27 @@ export interface McpStatusView {
 	connectedNames: string[];
 }
 
+export type SubscriptionUsageWindowKind =
+	| "hourly"
+	| "weekly"
+	| "monthly"
+	| "rolling"
+	| "quota";
+
+export interface SubscriptionUsageWindowView {
+	kind: SubscriptionUsageWindowKind;
+	label: string;
+	remainingPercent: number;
+	windowMinutes?: number;
+	resetsAt?: number;
+}
+
+export interface SubscriptionUsageView {
+	providerId: string;
+	capturedAt: number;
+	windows: SubscriptionUsageWindowView[];
+}
+
 function totalWidth(
 	items: readonly StatuslineLayoutItem[],
 	separatorWidth: number,
@@ -162,4 +183,119 @@ export function parseMcpStatusEvent(data: unknown): McpStatusView | undefined {
 		return undefined;
 	}
 	return { connectedCount, enabledCount, connectedNames };
+}
+
+function isSubscriptionUsageWindowKind(
+	value: unknown,
+): value is SubscriptionUsageWindowKind {
+	return (
+		value === "hourly" ||
+		value === "weekly" ||
+		value === "monthly" ||
+		value === "rolling" ||
+		value === "quota"
+	);
+}
+
+function subscriptionUsageWindowRank(
+	kind: SubscriptionUsageWindowKind,
+): number {
+	if (kind === "hourly" || kind === "rolling") return 0;
+	if (kind === "weekly") return 1;
+	if (kind === "monthly") return 2;
+	return 3;
+}
+
+/** Decodes the subscription-usage v1 event at the extension boundary. */
+export function parseSubscriptionUsageEvent(
+	data: unknown,
+): SubscriptionUsageView | undefined {
+	if (typeof data !== "object" || data === null) return undefined;
+	const snapshot = data as {
+		v?: unknown;
+		status?: unknown;
+		providerId?: unknown;
+		capturedAt?: unknown;
+		windows?: unknown;
+	};
+	if (
+		snapshot.v !== 1 ||
+		snapshot.status !== "ready" ||
+		typeof snapshot.providerId !== "string" ||
+		typeof snapshot.capturedAt !== "number" ||
+		!Number.isFinite(snapshot.capturedAt) ||
+		!Array.isArray(snapshot.windows)
+	) {
+		return undefined;
+	}
+	const providerId = sanitizeStatusText(snapshot.providerId);
+	if (!providerId || providerId.length > 80) return undefined;
+	const windows = snapshot.windows
+		.flatMap((entry): SubscriptionUsageWindowView[] => {
+			if (typeof entry !== "object" || entry === null) return [];
+			const candidate = entry as {
+				kind?: unknown;
+				label?: unknown;
+				remainingPercent?: unknown;
+				windowMinutes?: unknown;
+				resetsAt?: unknown;
+			};
+			if (
+				!isSubscriptionUsageWindowKind(candidate.kind) ||
+				typeof candidate.label !== "string" ||
+				typeof candidate.remainingPercent !== "number" ||
+				!Number.isFinite(candidate.remainingPercent) ||
+				candidate.remainingPercent < 0 ||
+				candidate.remainingPercent > 100
+			) {
+				return [];
+			}
+			const label = sanitizeStatusText(candidate.label);
+			if (!label || label.length > 16) return [];
+			if (
+				candidate.windowMinutes !== undefined &&
+				(typeof candidate.windowMinutes !== "number" ||
+					!Number.isFinite(candidate.windowMinutes) ||
+					candidate.windowMinutes <= 0)
+			) {
+				return [];
+			}
+			if (
+				candidate.resetsAt !== undefined &&
+				(typeof candidate.resetsAt !== "number" ||
+					!Number.isFinite(candidate.resetsAt) ||
+					candidate.resetsAt <= 0)
+			) {
+				return [];
+			}
+			return [
+				{
+					kind: candidate.kind,
+					label,
+					remainingPercent: candidate.remainingPercent,
+					...(candidate.windowMinutes === undefined
+						? {}
+						: { windowMinutes: candidate.windowMinutes }),
+					...(candidate.resetsAt === undefined
+						? {}
+						: { resetsAt: candidate.resetsAt }),
+				},
+			];
+		})
+		.sort((left, right) => {
+			const rank =
+				subscriptionUsageWindowRank(left.kind) -
+				subscriptionUsageWindowRank(right.kind);
+			if (rank !== 0) return rank;
+			const duration =
+				(left.windowMinutes ?? Number.POSITIVE_INFINITY) -
+				(right.windowMinutes ?? Number.POSITIVE_INFINITY);
+			return duration === 0 ? left.label.localeCompare(right.label) : duration;
+		});
+	if (windows.length === 0) return undefined;
+	return {
+		providerId,
+		capturedAt: snapshot.capturedAt,
+		windows,
+	};
 }

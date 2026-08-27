@@ -54,6 +54,7 @@ pi)
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/last-model-effort|.pi/agent/extensions/last-model-effort|directory|-|插件|last-model-effort' \
+			'harnesses/pi/agent/extensions/subscription-usage|.pi/agent/extensions/subscription-usage|directory|-|插件|subscription-usage' \
 			'harnesses/pi/agent/extensions/work-animation.ts|.pi/agent/extensions/work-animation.ts|file|-|插件|work-animation' \
 			'harnesses/pi/agent/extensions/work-animation.json|.pi/agent/extensions/work-animation.json|file|-|插件|work-animation' \
 			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-|插件|image-gen' \

@@ -69,6 +69,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `session` | session 名称；默认配置未启用 |
 | `branch` | Git branch |
 | `context` | context 使用率和窗口大小 |
+| `usage` | 读取 `subscription-usage/status/v1` 结构化数据，在 context 后显示 Nerd Font 窗口图标与剩余百分比；不显示 Provider 和重置倒计时，顺序固定为 5h / 1w / 1m |
 | `tokens` | session 输入/输出 token |
 | `cache` | 当前轮、最近五轮和 session cache hit rate |
 | `cost` | session 成本；订阅模型显示 `$0.000` |
@@ -93,16 +94,17 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 ## UI Meta 协议
 
-`uiMeta` 不额外调用模型。它在正常请求的 system prompt 中加入固定协议，并通过临时的 `<ui_meta_request>` 上下文标记要求主模型输出两类隐藏记录：
+`uiMeta` 不额外调用模型。它在正常请求的 system prompt 中加入固定协议，并通过临时的 `<ui_meta_request>` 上下文标记要求主模型输出两类单行隐藏记录：
 
-```xml
-<ui_meta>{"v":1,"kind":"turn_start","title":"评估 UI 元数据","session":{"action":"keep"}}</ui_meta>
-<ui_meta>{"v":1,"kind":"turn_end","recap":"完成协议评估并确定实现边界"}</ui_meta>
+```text
+@@PI_UI_META_V1@@{"v":1,"kind":"turn_start","title":"评估 UI 元数据","session":{"action":"keep"}}
+@@PI_UI_META_V1@@{"v":1,"kind":"turn_end","recap":"完成协议评估并确定实现边界"}
 ```
 
-- `turn_start` 位于第一条 assistant 消息开头：`title` 表示最近一轮正在做什么；`session` 只有在首次明确目标或高层目标切换时才使用 `set`。
-- `turn_end` 位于无工具调用的最终 assistant 消息末尾：`recap` 表示本轮实际完成、部分完成或阻塞的结果。
-- metadata 在流式 TUI 中由 Markdown transformer 隐藏，在 `message_end` 持久化前从 assistant 消息中删除。
+- `@@PI_UI_META_V1@@` 是完整信封，记录以物理换行结束，不使用 XML 闭合标签，避免模型或中间层改写结束串。
+- `turn_start` 独占第一条 assistant 消息的首行：`title` 表示最近一轮正在做什么；`session` 只有在首次明确目标或高层目标切换时才使用 `set`。
+- `turn_end` 独占无工具调用的最终 assistant 消息末行：`recap` 表示本轮实际完成、部分完成或阻塞的结果。
+- metadata 在流式 TUI 中由 Markdown transformer 按首尾保留行隐藏，在 `message_end` 持久化前再次删除；旧 `<ui_meta>` 单行记录仍兼容读取和清理。
 - Recap 作为 `session-ui:turn-recap` 自定义 entry 持久化，不进入模型上下文。
 - 自动 session 名称通过 `session-ui:ui-meta-state` 记录来源；手工 `/name` 默认锁定 session 名称，但不会阻止每轮终端标题更新。
 - 所有字段都会过滤终端控制字符、双向文本控制符并按配置截断；无效 JSON、过期阶段或失败响应会被忽略。

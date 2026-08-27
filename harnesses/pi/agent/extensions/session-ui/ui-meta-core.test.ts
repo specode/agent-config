@@ -6,6 +6,7 @@ import {
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
+	UI_META_SENTINEL,
 	type UiMetaLimits,
 } from "./ui-meta-core.ts";
 
@@ -14,6 +15,8 @@ const limits: UiMetaLimits = {
 	recap: 40,
 	sessionName: 16,
 };
+
+const meta = (record: object) => `${UI_META_SENTINEL}${JSON.stringify(record)}`;
 
 test("preserves protocol progress only for compaction continuations", () => {
 	const previous = { startReceived: true, recapReceived: false };
@@ -35,11 +38,20 @@ test("commits recap only for a successful tool-free final response", () => {
 	assert.equal(canCommitUiMetaRecap("length", false), false);
 });
 
-test("extracts typed start and end records", () => {
+test("extracts typed start and end records from sentinel lines", () => {
 	const text = [
-		'<ui_meta>{"v":1,"kind":"turn_start","title":"Meta design","session":{"action":"set","name":"Session titles"}}</ui_meta>',
+		meta({
+			v: 1,
+			kind: "turn_start",
+			title: "Meta design",
+			session: { action: "set", name: "Session titles" },
+		}),
 		"normal response",
-		'<ui_meta>{"v":1,"kind":"turn_end","recap":"Designed protocol and split consumers"}</ui_meta>',
+		meta({
+			v: 1,
+			kind: "turn_end",
+			recap: "Designed protocol and split consumers",
+		}),
 	].join("\n");
 
 	assert.deepEqual(extractUiMetaRecords(text, limits), [
@@ -59,10 +71,10 @@ test("extracts typed start and end records", () => {
 
 test("accepts keep and ignores malformed or unsupported records", () => {
 	const text = [
-		'<ui_meta>{"v":1,"kind":"turn_start","session":{"action":"keep"}}</ui_meta>',
-		'<ui_meta>{"v":2,"kind":"turn_end","recap":"wrong version"}</ui_meta>',
-		"<ui_meta>{not json}</ui_meta>",
-		'<ui_meta>{"v":1,"kind":"turn_start","session":{"action":"set"}}</ui_meta>',
+		meta({ v: 1, kind: "turn_start", session: { action: "keep" } }),
+		meta({ v: 2, kind: "turn_end", recap: "wrong version" }),
+		`${UI_META_SENTINEL}{not json}`,
+		meta({ v: 1, kind: "turn_start", session: { action: "set" } }),
 	].join("\n");
 
 	assert.deepEqual(extractUiMetaRecords(text, limits), [
@@ -71,8 +83,11 @@ test("accepts keep and ignores malformed or unsupported records", () => {
 });
 
 test("ignores valid-looking metadata examples away from protocol boundaries", () => {
-	const example =
-		'Inline example <ui_meta>{"v":1,"kind":"turn_start","title":"Do not apply"}</ui_meta> remains body text';
+	const example = `Inline example ${meta({
+		v: 1,
+		kind: "turn_start",
+		title: "Do not apply",
+	})} remains body text`;
 	assert.deepEqual(extractUiMetaRecords(example, limits), []);
 	assert.equal(stripUiMetaBlocks(example), example);
 });
@@ -87,25 +102,52 @@ test("sanitizes controls, bidi overrides, whitespace, and visible length", () =>
 
 test("strips complete metadata without removing the normal response", () => {
 	const markdown = [
-		'<ui_meta>{"v":1,"kind":"turn_start","title":"Test"}</ui_meta>',
+		meta({ v: 1, kind: "turn_start", title: "Test" }),
 		"",
 		"Normal response",
 		"",
-		'<ui_meta>{"v":1,"kind":"turn_end","recap":"Done"}</ui_meta>',
+		meta({ v: 1, kind: "turn_end", recap: "Done" }),
 	].join("\n");
 	assert.equal(stripUiMetaBlocks(markdown), "Normal response");
 });
 
-test("hides unfinished metadata and split tag prefixes only when requested", () => {
+test("hides unfinished sentinel prefixes only when requested", () => {
 	assert.equal(
-		stripUiMetaBlocks('Normal response\n<ui_meta>{"v":1', true),
+		stripUiMetaBlocks(`Normal response\n${UI_META_SENTINEL}{"v":1`, true),
 		"Normal response",
 	);
 	assert.equal(stripUiMetaBlocks("", true), "");
-	assert.equal(stripUiMetaBlocks("<ui_", true), "");
+	assert.equal(stripUiMetaBlocks("@@PI_UI_", true), "");
 	assert.equal(
-		stripUiMetaBlocks('Normal response\n<ui_meta>{"v":1', false),
-		'Normal response\n<ui_meta>{"v":1',
+		stripUiMetaBlocks(`Normal response\n${UI_META_SENTINEL.slice(0, 8)}`, false),
+		`Normal response\n${UI_META_SENTINEL.slice(0, 8)}`,
 	);
 	assert.equal(stripUiMetaBlocks("Result is 1 < 2", true), "Result is 1 < 2");
+});
+
+test("keeps malformed protocol lines out after normal prose arrives", () => {
+	assert.equal(
+		stripUiMetaBlocks(`${UI_META_SENTINEL}{"v":1\nNormal response`, true),
+		"Normal response",
+	);
+	assert.equal(
+		stripUiMetaBlocks(
+			'<ui_meta>{"v":1,"kind":"turn_start","title":"Test"}_meta>\nNormal response',
+			true,
+		),
+		"Normal response",
+	);
+});
+
+test("reads and strips legacy one-line records for compatibility", () => {
+	const legacy = [
+		'<ui_meta>{"v":1,"kind":"turn_start","session":{"action":"keep"}}</ui_meta>',
+		"Normal response",
+		'<ui_meta>{"v":1,"kind":"turn_end","recap":"Done"}_meta>',
+	].join("\n");
+	assert.deepEqual(extractUiMetaRecords(legacy, limits), [
+		{ v: 1, kind: "turn_start", session: { action: "keep" } },
+		{ v: 1, kind: "turn_end", recap: "Done" },
+	]);
+	assert.equal(stripUiMetaBlocks(legacy, true), "Normal response");
 });

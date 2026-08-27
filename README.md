@@ -73,6 +73,10 @@
 
 UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
 
+### Pi subscription-usage
+
+`harnesses/pi/agent/extensions/subscription-usage/` 是独立的 Pi package，通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [插件文档](harnesses/pi/agent/extensions/subscription-usage/README.md)。
+
 ### Pi work-animation
 
 `harnesses/pi/agent/extensions/work-animation.ts` 提供 Pi 工作态动画，配置文件为同目录下的 `work-animation.json`。启用后会隐藏 Pi 原生工作提示行，在编辑器上方显示带英文状态的小人，并在保留原标题的同时为终端标题添加动画前缀。动画随 agent 生命周期自动启停，不提供单独的 demo 模式。

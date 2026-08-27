@@ -16,6 +16,7 @@
       "directory",
       "branch",
       "context",
+      "usage",
       "tokens",
       "cache",
       "cost",
@@ -27,7 +28,8 @@
         "pi-lens-lsp",
         "openai-fast",
         "mcp",
-        "mcp-*"
+        "mcp-*",
+        "subscription-usage"
       ]
     }
   },
