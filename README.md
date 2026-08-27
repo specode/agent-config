@@ -55,7 +55,7 @@
 
 ### Pi last-model-effort
 
-`harnesses/pi/agent/extensions/last-model-effort/` 会按模型记住最近实际使用的 thinking / reasoning effort，切换回来时自动恢复，并在新建会话时恢复最近模型；`pi -c`、`/resume`、fork 和显式 CLI 参数仍保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库，也不改写 Pi 的 `modelThinkingLevels`。详细行为见 [插件文档](harnesses/pi/agent/extensions/last-model-effort/README.md)。
+`harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-last-model-effort` 启用独立 Pi package。它会按模型记住最近实际使用的 thinking / reasoning effort，切换回来时自动恢复，并在新建会话时恢复最近模型；`pi -c`、`/resume`、fork 和显式 CLI 参数仍保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库，也不改写 Pi 的 `modelThinkingLevels`。详细行为见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-last-model-effort)。
 
 ### Pi session-ui
 
@@ -75,7 +75,7 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 
 ### Pi subscription-usage
 
-`harnesses/pi/agent/extensions/subscription-usage/` 是独立的 Pi package，通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [插件文档](harnesses/pi/agent/extensions/subscription-usage/README.md)。
+`harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-subscription-usage` 启用独立 Pi package。它通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-subscription-usage)。
 
 ### Pi work-animation
 

@@ -25,6 +25,8 @@
 		"npm:pi-mcp-adapter",
 		"npm:@specode/pi-kimi-cu",
 		"npm:@specode/pi-kimi-webbridge-bootstrap",
+		"npm:@specode/pi-last-model-effort",
+		"npm:@specode/pi-subscription-usage",
 		"npm:@diegopetrucci/pi-openai-fast",
 		"npm:pi-antigravity"
 	],
