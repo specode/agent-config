@@ -55,7 +55,7 @@
 
 ### Pi last-model-effort
 
-`harnesses/pi/agent/extensions/last-model-effort/` 在新建会话时恢复最近实际使用的模型与 thinking / reasoning effort，同时让 `pi -c`、`/resume`、fork 和显式 CLI 参数保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库。详细行为见 [插件文档](harnesses/pi/agent/extensions/last-model-effort/README.md)。
+`harnesses/pi/agent/extensions/last-model-effort/` 会按模型记住最近实际使用的 thinking / reasoning effort，切换回来时自动恢复，并在新建会话时恢复最近模型；`pi -c`、`/resume`、fork 和显式 CLI 参数仍保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库，也不改写 Pi 的 `modelThinkingLevels`。详细行为见 [插件文档](harnesses/pi/agent/extensions/last-model-effort/README.md)。
 
 ### Pi session-ui
 

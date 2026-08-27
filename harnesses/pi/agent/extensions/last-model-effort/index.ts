@@ -1,5 +1,4 @@
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
 	getAgentDir,
 	parseArgs,
@@ -7,14 +6,26 @@ import {
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
+	getRememberedThinkingLevel,
 	hasModelThinkingSuffix,
-	parseLastModelEffortState,
+	mergeLastModelEffortStates,
+	modelEffortKey,
+	rememberModelEffort,
 	RestoreThinkingEventGate,
 	shouldManageLastSelection,
 	shouldRestoreLastSelection,
 	type LastModelEffortState,
+	type LastModelSelection,
 	type ThinkingLevel,
 } from "./core.ts";
+import {
+	ThinkingObservationCoordinator,
+	type EffortModelReference,
+} from "./event-coordinator.ts";
+import {
+	loadLastModelEffortState,
+	updateLastModelEffortState,
+} from "./state-store.ts";
 
 const STATE_FILE_NAME = "last-model-effort.json";
 
@@ -32,87 +43,36 @@ function getStatePath(): string {
 		: join(getAgentDir(), "state", STATE_FILE_NAME);
 }
 
-async function loadState(
-	path: string,
-): Promise<LastModelEffortState | undefined> {
-	try {
-		const parsed = JSON.parse(await readFile(path, "utf8"));
-		const state = parseLastModelEffortState(parsed, isSystemThinkingLevel);
-		if (!state) {
-			console.error(`[last-model-effort] Ignoring invalid state file: ${path}`);
-		}
-		return state;
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-			console.error(`[last-model-effort] Failed to read ${path}:`, error);
-		}
-		return undefined;
-	}
-}
-
-async function saveState(
-	path: string,
-	state: LastModelEffortState,
-): Promise<void> {
-	const directory = dirname(path);
-	const temporary = join(
-		directory,
-		`.${basename(path)}.${process.pid}.${Date.now()}.tmp`,
-	);
-
-	await mkdir(directory, { recursive: true, mode: 0o700 });
-	try {
-		await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, {
-			encoding: "utf8",
-			mode: 0o600,
-		});
-		await rename(temporary, path);
-	} finally {
-		await unlink(temporary).catch(() => undefined);
-	}
-}
-
-function captureCurrent(
-	ctx: ExtensionContext,
-	thinkingLevel: ThinkingLevel,
-): LastModelEffortState | undefined {
-	if (!ctx.model) return undefined;
-	return {
-		version: 1,
-		provider: ctx.model.provider,
-		modelId: ctx.model.id,
-		thinkingLevel,
-		updatedAt: new Date().toISOString(),
-	};
-}
-
-function sameModel(
-	ctx: ExtensionContext,
-	state: LastModelEffortState,
+function selectionMatchesModel(
+	selection: LastModelSelection,
+	model: EffortModelReference | undefined,
 ): boolean {
 	return (
-		ctx.model?.provider === state.provider && ctx.model.id === state.modelId
+		model?.provider === selection.provider && model.id === selection.modelId
 	);
 }
 
-function scopedThinkingLevel(ctx: ExtensionContext): ThinkingLevel | undefined {
-	if (!ctx.model) return undefined;
+function scopedThinkingLevel(
+	ctx: ExtensionContext,
+	provider = ctx.model?.provider,
+	modelId = ctx.model?.id,
+): ThinkingLevel | undefined {
+	if (!provider || !modelId) return undefined;
 	return ctx.scopedModels.find(
-		(entry) =>
-			entry.model.provider === ctx.model?.provider &&
-			entry.model.id === ctx.model.id,
+		(entry) => entry.model.provider === provider && entry.model.id === modelId,
 	)?.thinkingLevel;
 }
 
 function modelAllowedByScope(
 	ctx: ExtensionContext,
-	state: LastModelEffortState,
+	selection: LastModelSelection,
 ): boolean {
 	return (
 		ctx.scopedModels.length === 0 ||
 		ctx.scopedModels.some(
 			(entry) =>
-				entry.model.provider === state.provider && entry.model.id === state.modelId,
+				entry.model.provider === selection.provider &&
+				entry.model.id === selection.modelId,
 		)
 	);
 }
@@ -127,20 +87,64 @@ export default function lastModelEffort(pi: ExtensionAPI): void {
 
 	const statePath = getStatePath();
 	const restoreThinkingEvents = new RestoreThinkingEventGate();
-	let writeQueue = Promise.resolve();
+	let state: LastModelEffortState | undefined;
+	let invalidStateWarned = false;
+	let writeQueue: Promise<void> = Promise.resolve();
 
-	function persist(state: LastModelEffortState): Promise<void> {
+	function reportInvalidState(): void {
+		if (invalidStateWarned) return;
+		invalidStateWarned = true;
+		console.error(
+			`[last-model-effort] Ignoring invalid state file: ${statePath}`,
+		);
+	}
+
+	async function refreshState(): Promise<LastModelEffortState | undefined> {
+		await writeQueue;
+		try {
+			const loaded = await loadLastModelEffortState(
+				statePath,
+				isSystemThinkingLevel,
+			);
+			if (loaded.invalid) reportInvalidState();
+			state = mergeLastModelEffortStates(state, loaded.state);
+		} catch (error) {
+			console.error(`[last-model-effort] Failed to read ${statePath}:`, error);
+		}
+		return state;
+	}
+
+	function enqueueStateUpdate(
+		update: (current: LastModelEffortState | undefined) => LastModelEffortState,
+	): Promise<void> {
 		writeQueue = writeQueue
-			.then(() => saveState(statePath, state))
+			.then(async () => {
+				state = await updateLastModelEffortState(
+					statePath,
+					isSystemThinkingLevel,
+					(current) => update(mergeLastModelEffortStates(state, current)),
+				);
+			})
 			.catch((error) => {
 				console.error(`[last-model-effort] Failed to write ${statePath}:`, error);
 			});
 		return writeQueue;
 	}
 
+	function persistEffort(
+		provider: string,
+		modelId: string,
+		thinkingLevel: ThinkingLevel,
+		updatedAt = new Date().toISOString(),
+	): Promise<void> {
+		return enqueueStateUpdate((current) =>
+			rememberModelEffort(current, provider, modelId, thinkingLevel, updatedAt),
+		);
+	}
+
 	function persistCurrent(ctx: ExtensionContext): Promise<void> {
-		const state = captureCurrent(ctx, pi.getThinkingLevel());
-		return state ? persist(state) : Promise.resolve();
+		if (!ctx.model) return Promise.resolve();
+		return persistEffort(ctx.model.provider, ctx.model.id, pi.getThinkingLevel());
 	}
 
 	function trackRestoreThinkingChange<T>(
@@ -149,8 +153,78 @@ export default function lastModelEffort(pi: ExtensionAPI): void {
 		return restoreThinkingEvents.track(() => pi.getThinkingLevel(), operation);
 	}
 
+	const thinkingObservations = new ThinkingObservationCoordinator(
+		() => pi.getThinkingLevel(),
+		(observation) =>
+			persistEffort(
+				observation.provider,
+				observation.modelId,
+				observation.thinkingLevel,
+				observation.observedAt,
+			),
+	);
+
+	async function restoreRecentModel(
+		saved: LastModelEffortState,
+		explicitModel: boolean,
+		ctx: ExtensionContext,
+	): Promise<boolean> {
+		if (explicitModel || selectionMatchesModel(saved.lastSelection, ctx.model)) {
+			return true;
+		}
+
+		const modelLabel = modelEffortKey(
+			saved.lastSelection.provider,
+			saved.lastSelection.modelId,
+		);
+		if (!modelAllowedByScope(ctx, saved.lastSelection)) {
+			warn(
+				ctx,
+				`Could not restore recent model ${modelLabel}: it is outside the current scoped models`,
+			);
+			return false;
+		}
+
+		const model = ctx.modelRegistry.find(
+			saved.lastSelection.provider,
+			saved.lastSelection.modelId,
+		);
+		if (!model) {
+			warn(
+				ctx,
+				`Could not restore recent model ${modelLabel}: the model is unavailable`,
+			);
+			return false;
+		}
+
+		const restored = await trackRestoreThinkingChange(() => pi.setModel(model));
+		if (!restored) {
+			warn(
+				ctx,
+				`Could not restore recent model ${modelLabel}: authentication is unavailable`,
+			);
+		}
+		return restored;
+	}
+
+	async function restoreStartupThinking(
+		saved: LastModelEffortState,
+		explicitThinking: boolean,
+		initialThinking: ThinkingLevel,
+		ctx: ExtensionContext,
+	): Promise<void> {
+		if (!ctx.model) return;
+		const targetThinking = explicitThinking
+			? initialThinking
+			: (scopedThinkingLevel(ctx) ??
+				getRememberedThinkingLevel(saved, ctx.model.provider, ctx.model.id) ??
+				pi.getThinkingLevel());
+		await trackRestoreThinkingChange(() => pi.setThinkingLevel(targetThinking));
+	}
+
 	pi.on("session_start", async (event, ctx) => {
-		const saved = await loadState(statePath);
+		thinkingObservations.setActiveModel(ctx.model);
+		const saved = await refreshState();
 		const args = parseArgs(process.argv.slice(2));
 		const hasSessionRestore =
 			args.continue === true ||
@@ -173,43 +247,14 @@ export default function lastModelEffort(pi: ExtensionAPI): void {
 			args.thinking !== undefined ||
 			hasModelThinkingSuffix(args.model, isSystemThinkingLevel);
 		const initialThinking = pi.getThinkingLevel();
-		let modelRestored = explicitModel;
 
 		restoreThinkingEvents.begin();
+		let modelRestored = false;
 		try {
-			if (!explicitModel) {
-				if (sameModel(ctx, saved)) {
-					modelRestored = true;
-				} else if (modelAllowedByScope(ctx, saved)) {
-					const model = ctx.modelRegistry.find(saved.provider, saved.modelId);
-					if (model) {
-						modelRestored = await trackRestoreThinkingChange(() =>
-							pi.setModel(model),
-						);
-						if (!modelRestored) {
-							warn(
-								ctx,
-								`Could not restore recent model ${saved.provider}/${saved.modelId}: authentication is unavailable`,
-							);
-						}
-					} else {
-						warn(
-							ctx,
-							`Could not restore recent model ${saved.provider}/${saved.modelId}: the model is unavailable`,
-						);
-					}
-				} else {
-					warn(
-						ctx,
-						`Could not restore recent model ${saved.provider}/${saved.modelId}: it is outside the current scoped models`,
-					);
-				}
+			modelRestored = await restoreRecentModel(saved, explicitModel, ctx);
+			if (modelRestored) {
+				await restoreStartupThinking(saved, explicitThinking, initialThinking, ctx);
 			}
-
-			const targetThinking = explicitThinking
-				? initialThinking
-				: (scopedThinkingLevel(ctx) ?? saved.thinkingLevel);
-			await trackRestoreThinkingChange(() => pi.setThinkingLevel(targetThinking));
 		} finally {
 			restoreThinkingEvents.end();
 		}
@@ -217,24 +262,40 @@ export default function lastModelEffort(pi: ExtensionAPI): void {
 		if (modelRestored) await persistCurrent(ctx);
 	});
 
-	pi.on("model_select", async (event, _ctx) => {
+	pi.on("model_select", async (event, ctx) => {
+		await thinkingObservations.beforeModelSelect(event.previousModel);
+		thinkingObservations.setActiveModel(event.model);
 		if (restoreThinkingEvents.isRestoring) return;
-		const state: LastModelEffortState = {
-			version: 1,
-			provider: event.model.provider,
-			modelId: event.model.id,
-			thinkingLevel: pi.getThinkingLevel(),
-			updatedAt: new Date().toISOString(),
-		};
-		await persist(state);
-	});
 
-	pi.on("thinking_level_select", async (_event, ctx) => {
-		if (restoreThinkingEvents.shouldSuppressThinkingEvent()) return;
+		if (event.source === "restore") {
+			await persistCurrent(ctx);
+			return;
+		}
+
+		const latest = await refreshState();
+		const targetThinking =
+			scopedThinkingLevel(ctx, event.model.provider, event.model.id) ??
+			getRememberedThinkingLevel(latest, event.model.provider, event.model.id);
+
+		if (targetThinking !== undefined) {
+			restoreThinkingEvents.begin();
+			try {
+				await trackRestoreThinkingChange(() => pi.setThinkingLevel(targetThinking));
+			} finally {
+				restoreThinkingEvents.end();
+			}
+		}
+
 		await persistCurrent(ctx);
 	});
 
+	pi.on("thinking_level_select", (event, ctx) => {
+		if (restoreThinkingEvents.shouldSuppressThinkingEvent()) return;
+		thinkingObservations.observe(ctx.model, event.level);
+	});
+
 	pi.on("session_shutdown", async () => {
+		await thinkingObservations.flush();
 		await writeQueue;
 	});
 }
