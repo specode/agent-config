@@ -16,6 +16,7 @@ import {
 	parseMcpFooterText,
 	parseMcpStatusEvent,
 	parseSubscriptionUsageEvent,
+	separatorBetweenStatuslineSegments,
 	type McpStatusView,
 	type StatuslineOverflow,
 	type SubscriptionUsageView,
@@ -242,10 +243,19 @@ export function layoutStatusSegments(
 				: {}),
 		})),
 		width,
-		visibleWidth(separator),
+		(left, right) =>
+			visibleWidth(
+				separatorBetweenStatuslineSegments(left.id, right.id, separator),
+			),
 		overflow,
 	);
-	const line = fitted.map((item) => item.value).join(separator);
+	const line = fitted
+		.map((item, index) => {
+			if (index === 0) return item.value;
+			const previous = fitted[index - 1]!;
+			return `${separatorBetweenStatuslineSegments(previous.id, item.id, separator)}${item.value}`;
+		})
+		.join("");
 	return visibleWidth(line) <= width ? line : truncateToWidth(line, width);
 }
 

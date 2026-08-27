@@ -8,6 +8,7 @@ import {
 	parseMcpFooterText,
 	parseMcpStatusEvent,
 	parseSubscriptionUsageEvent,
+	separatorBetweenStatuslineSegments,
 	type StatuslineLayoutItem,
 } from "./statusline-core.ts";
 
@@ -35,6 +36,28 @@ test("drop-right preserves the configured prefix", () => {
 	assert.deepEqual(
 		fitStatuslineItems(items, 10, 2, "drop-right").map(({ id }) => id),
 		["model"],
+	);
+});
+
+test("pair-aware separators use spaces and preserve available width", () => {
+	const items = [item("model", 5), item("effort", 4), item("branch", 6)];
+	const separatorWidth = (
+		left: StatuslineLayoutItem,
+		right: StatuslineLayoutItem,
+	) => separatorBetweenStatuslineSegments(left.id, right.id, "  >  ").length;
+	assert.deepEqual(
+		fitStatuslineItems(items, 10, separatorWidth, "drop-right").map(
+			({ id }) => id,
+		),
+		["model", "effort"],
+	);
+	assert.equal(
+		separatorBetweenStatuslineSegments("directory", "branch", "  >  "),
+		" ",
+	);
+	assert.equal(
+		separatorBetweenStatuslineSegments("effort", "directory", "  >  "),
+		"  >  ",
 	);
 });
 

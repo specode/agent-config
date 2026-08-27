@@ -76,7 +76,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `mcp` | MCP 已连接/已启用数量和可用的 server 名称 |
 | `extensions` | 未被 exclude 过滤的其他 extension statuses |
 
-`drop-right` 保持配置顺序，并从右侧移除放不下的 segment。`priority` 会先使用 segment 的紧凑形式，再隐藏低优先级且非必需的 segment。最终输出仍会按终端可见宽度截断。
+`model` 与 `effort`、`directory` 与 `branch` 相邻展示时只用一个空格连接，其余 segment 使用 Powerline 分隔符。`drop-right` 保持配置顺序，并从右侧移除放不下的 segment。`priority` 会先使用 segment 的紧凑形式，再隐藏低优先级且非必需的 segment。最终输出仍会按终端可见宽度截断。
 
 其他本地扩展可通过 `session-ui/statusline/register/v1` 事件注册 segment；只有同时出现在 `statusline.segments` 中的 ID 才会展示。未知 ID 会在 session 启动时提示并跳过。
 

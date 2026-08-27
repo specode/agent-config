@@ -37,22 +37,29 @@ export interface SubscriptionUsageView {
 	windows: SubscriptionUsageWindowView[];
 }
 
+export type StatuslineSeparatorWidth =
+	| number
+	| ((left: StatuslineLayoutItem, right: StatuslineLayoutItem) => number);
+
 function totalWidth(
 	items: readonly StatuslineLayoutItem[],
-	separatorWidth: number,
+	separatorWidth: StatuslineSeparatorWidth,
 ): number {
-	if (items.length === 0) return 0;
-	return (
-		items.reduce((total, item) => total + item.width, 0) +
-		separatorWidth * (items.length - 1)
-	);
+	let width = items.reduce((total, item) => total + item.width, 0);
+	for (let index = 1; index < items.length; index++) {
+		width +=
+			typeof separatorWidth === "number"
+				? separatorWidth
+				: separatorWidth(items[index - 1]!, items[index]!);
+	}
+	return width;
 }
 
 /** Selects and optionally compacts statusline items without knowing about ANSI. */
 export function fitStatuslineItems(
 	items: readonly StatuslineLayoutItem[],
 	width: number,
-	separatorWidth: number,
+	separatorWidth: StatuslineSeparatorWidth,
 	overflow: StatuslineOverflow,
 ): StatuslineLayoutItem[] {
 	if (width <= 0 || items.length === 0) return [];
@@ -94,6 +101,19 @@ export function fitStatuslineItems(
 
 function escapeRegexLiteral(value: string): string {
 	return value.replace(/[\\^$+?.()|[\]{}]/g, "\\$&");
+}
+
+export function separatorBetweenStatuslineSegments(
+	leftId: string,
+	rightId: string,
+	defaultSeparator: string,
+): string {
+	const usesSpace =
+		(leftId === "model" && rightId === "effort") ||
+		(leftId === "effort" && rightId === "model") ||
+		(leftId === "directory" && rightId === "branch") ||
+		(leftId === "branch" && rightId === "directory");
+	return usesSpace ? " " : defaultSeparator;
 }
 
 /** Matches an extension status id; `*` is the only wildcard. */
