@@ -23,10 +23,14 @@ export type SubscriptionUsageWindowKind =
 	| "rolling"
 	| "quota";
 
+export type SubscriptionUsageDisplayMode = "remaining" | "used";
+
 export interface SubscriptionUsageWindowView {
 	kind: SubscriptionUsageWindowKind;
 	label: string;
 	remainingPercent: number;
+	usedPercent: number;
+	displayPercent: number;
 	windowMinutes?: number;
 	resetsAt?: number;
 }
@@ -34,6 +38,7 @@ export interface SubscriptionUsageWindowView {
 export interface SubscriptionUsageView {
 	providerId: string;
 	capturedAt: number;
+	displayMode: SubscriptionUsageDisplayMode;
 	windows: SubscriptionUsageWindowView[];
 }
 
@@ -217,6 +222,15 @@ function isSubscriptionUsageWindowKind(
 	);
 }
 
+function isUsagePercent(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isFinite(value) &&
+		value >= 0 &&
+		value <= 100
+	);
+}
+
 function subscriptionUsageWindowRank(
 	kind: SubscriptionUsageWindowKind,
 ): number {
@@ -236,6 +250,7 @@ export function parseSubscriptionUsageEvent(
 		status?: unknown;
 		providerId?: unknown;
 		capturedAt?: unknown;
+		displayMode?: unknown;
 		windows?: unknown;
 	};
 	if (
@@ -250,6 +265,13 @@ export function parseSubscriptionUsageEvent(
 	}
 	const providerId = sanitizeStatusText(snapshot.providerId);
 	if (!providerId || providerId.length > 80) return undefined;
+	const displayMode: SubscriptionUsageDisplayMode | undefined =
+		snapshot.displayMode === undefined || snapshot.displayMode === "remaining"
+			? "remaining"
+			: snapshot.displayMode === "used"
+				? "used"
+				: undefined;
+	if (!displayMode) return undefined;
 	const windows = snapshot.windows
 		.flatMap((entry): SubscriptionUsageWindowView[] => {
 			if (typeof entry !== "object" || entry === null) return [];
@@ -257,16 +279,19 @@ export function parseSubscriptionUsageEvent(
 				kind?: unknown;
 				label?: unknown;
 				remainingPercent?: unknown;
+				usedPercent?: unknown;
+				displayPercent?: unknown;
 				windowMinutes?: unknown;
 				resetsAt?: unknown;
 			};
 			if (
 				!isSubscriptionUsageWindowKind(candidate.kind) ||
 				typeof candidate.label !== "string" ||
-				typeof candidate.remainingPercent !== "number" ||
-				!Number.isFinite(candidate.remainingPercent) ||
-				candidate.remainingPercent < 0 ||
-				candidate.remainingPercent > 100
+				!isUsagePercent(candidate.remainingPercent) ||
+				(candidate.usedPercent !== undefined &&
+					!isUsagePercent(candidate.usedPercent)) ||
+				(candidate.displayPercent !== undefined &&
+					!isUsagePercent(candidate.displayPercent))
 			) {
 				return [];
 			}
@@ -288,11 +313,18 @@ export function parseSubscriptionUsageEvent(
 			) {
 				return [];
 			}
+			const usedPercent =
+				candidate.usedPercent ?? 100 - candidate.remainingPercent;
+			const displayPercent =
+				candidate.displayPercent ??
+				(displayMode === "used" ? usedPercent : candidate.remainingPercent);
 			return [
 				{
 					kind: candidate.kind,
 					label,
 					remainingPercent: candidate.remainingPercent,
+					usedPercent,
+					displayPercent,
 					...(candidate.windowMinutes === undefined
 						? {}
 						: { windowMinutes: candidate.windowMinutes }),
@@ -316,6 +348,7 @@ export function parseSubscriptionUsageEvent(
 	return {
 		providerId,
 		capturedAt: snapshot.capturedAt,
+		displayMode,
 		windows,
 	};
 }

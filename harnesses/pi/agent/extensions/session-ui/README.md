@@ -73,7 +73,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `session` | session 名称；默认配置未启用 |
 | `branch` | Git branch |
 | `context` | context 使用率和窗口大小 |
-| `usage` | 读取 `subscription-usage/status/v1` 结构化数据，在 context 后显示 Nerd Font 窗口图标与剩余百分比；不显示 Provider 和重置倒计时，顺序固定为 5h / 1w / 1m |
+| `usage` | 读取 `subscription-usage/status/v1` 结构化数据，在 context 后显示 Nerd Font 窗口图标与插件当前模式对应的百分比；颜色仍按剩余额度告警，不显示 Provider 和重置倒计时，顺序固定为 5h / 1w / 1m |
 | `tokens` | session 输入/输出 token |
 | `cache` | 当前轮、最近五轮和 session cache hit rate |
 | `cost` | session 成本；订阅模型显示 `$0.000` |

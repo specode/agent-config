@@ -377,7 +377,7 @@ function registerBuiltInSegments(
 					const icon = theme.fg("accent", usageWindowIcon(window.kind));
 					const percent = theme.fg(
 						remainingUsageColor(window.remainingPercent),
-						theme.bold(`${Math.round(window.remainingPercent)}%`),
+						theme.bold(`${Math.round(window.displayPercent)}%`),
 					);
 					return `${icon} ${window.label} ${percent}`;
 				})

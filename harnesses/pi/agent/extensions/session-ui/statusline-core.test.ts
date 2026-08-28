@@ -143,23 +143,30 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 		status: "ready",
 		providerId: "any-provider",
 		capturedAt: 123,
+		displayMode: "used",
 		windows: [
 			{
 				kind: "monthly",
 				label: "1m",
 				remainingPercent: 60,
+				usedPercent: 40,
+				displayPercent: 40,
 				windowMinutes: 43_200,
 			},
 			{
 				kind: "weekly",
 				label: "1w",
 				remainingPercent: 70,
+				usedPercent: 30,
+				displayPercent: 30,
 				windowMinutes: 10_080,
 			},
 			{
 				kind: "hourly",
 				label: "5h",
 				remainingPercent: 80,
+				usedPercent: 20,
+				displayPercent: 20,
 				windowMinutes: 300,
 				resetsAt: 1_800_000_000,
 			},
@@ -169,9 +176,33 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 		view?.windows.map((window) => window.label),
 		["5h", "1w", "1m"],
 	);
+	assert.equal(view?.displayMode, "used");
+	assert.deepEqual(
+		view?.windows.map((window) => window.displayPercent),
+		[20, 30, 40],
+	);
 	assert.equal(view?.windows[0]?.resetsAt, 1_800_000_000);
 	assert.equal(
 		parseSubscriptionUsageEvent({ v: 1, status: "unavailable" }),
 		undefined,
 	);
+});
+
+test("legacy subscription usage events default to remaining display", () => {
+	const view = parseSubscriptionUsageEvent({
+		v: 1,
+		status: "ready",
+		providerId: "legacy-provider",
+		capturedAt: 123,
+		windows: [
+			{
+				kind: "hourly",
+				label: "5h",
+				remainingPercent: 80,
+			},
+		],
+	});
+	assert.equal(view?.displayMode, "remaining");
+	assert.equal(view?.windows[0]?.usedPercent, 20);
+	assert.equal(view?.windows[0]?.displayPercent, 80);
 });
