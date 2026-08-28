@@ -28,7 +28,8 @@
 		"npm:@specode/pi-last-model-effort",
 		"npm:@specode/pi-subscription-usage",
 		"npm:@diegopetrucci/pi-openai-fast",
-		"npm:pi-antigravity"
+		"npm:pi-antigravity",
+		"npm:@ff-labs/pi-fff"
 	],
 	"hideThinkingBlock": true,
 	"fullscreenScrollbar": "auto",
