@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -16,6 +15,7 @@ import {
 	type UiMetaLimits,
 	type UiMetaRecord,
 } from "./ui-meta-core.ts";
+import type { SessionTitleController } from "./title-controller.ts";
 
 const UI_META_STATE_TYPE = "session-ui:ui-meta-state";
 const TURN_RECAP_TYPE = "session-ui:turn-recap";
@@ -156,7 +156,11 @@ ${
 - Metadata must not change the substance, ordering, or completeness of the normal response.`;
 }
 
-export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
+export function registerUiMeta(
+	pi: ExtensionAPI,
+	config: UiMetaConfig,
+	titleController: SessionTitleController,
+): void {
 	const limits: UiMetaLimits = {
 		title: config.title.maxLength,
 		recap: config.recap.maxLength,
@@ -172,14 +176,12 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 	let continueAfterCompaction = false;
 	let startReceived = !startMetadataEnabled;
 	let recapReceived = !config.recap.enabled;
-	let working = false;
 	let currentTitle = "";
 	let autoSessionName: string | undefined;
 	let pendingAutoSessionName: string | undefined;
 	let manualSessionNameLocked = false;
 	let pendingRecaps: TurnRecapData[] = [];
 	let stateDirty = false;
-	let lastCtx: ExtensionContext | undefined;
 
 	const buildRequestMarker = (needStart: boolean, needRecap: boolean) =>
 		`<ui_meta_request>${JSON.stringify({
@@ -190,21 +192,6 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 			currentSessionName: pi.getSessionName()?.trim() || null,
 			sessionNameLocked: manualSessionNameLocked,
 		})}</ui_meta_request>`;
-
-	const paintTitle = (ctx?: ExtensionContext) => {
-		const active = ctx ?? lastCtx;
-		if (!enabledForSession || !active?.hasUI || !config.title.enabled) return;
-		lastCtx = active;
-		const directory = basename(active.cwd || process.cwd()) || "pi";
-		const fallbackName = pi.getSessionName()?.trim();
-		const task = currentTitle || fallbackName || directory;
-		const prefix = working ? "● π" : "π";
-		active.ui.setTitle(
-			task === directory
-				? `${prefix} · ${directory}`
-				: `${prefix} · ${task} · ${directory}`,
-		);
-	};
 
 	const restoreState = (ctx: ExtensionContext) => {
 		const stored = latestStoredState(ctx);
@@ -222,6 +209,7 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 			);
 		}
 		stateDirty = false;
+		titleController.setTaskTitle(config.title.enabled ? currentTitle : "");
 	};
 
 	const flushPendingEntries = () => {
@@ -257,11 +245,7 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 		pi.setSessionName(name);
 	};
 
-	const applyRecords = (
-		records: UiMetaRecord[],
-		ctx: ExtensionContext,
-		allowRecap: boolean,
-	) => {
+	const applyRecords = (records: UiMetaRecord[], allowRecap: boolean) => {
 		if (!enabledForSession || !requestActive) return;
 		for (const record of records) {
 			if (record.kind === "turn_start" && !startReceived) {
@@ -274,7 +258,7 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 				if (config.title.enabled && record.title && record.title !== currentTitle) {
 					currentTitle = record.title;
 					stateDirty = true;
-					paintTitle(ctx);
+					titleController.setTaskTitle(currentTitle);
 				}
 				applySessionDirective(record);
 				continue;
@@ -313,15 +297,12 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 		continueAfterCompaction = false;
 		startReceived = !startMetadataEnabled;
 		recapReceived = !config.recap.enabled;
-		working = false;
 		pendingRecaps = [];
-		lastCtx = ctx;
 		if (!enabledForSession) return;
 		restoreState(ctx);
-		paintTitle(ctx);
 	});
 
-	pi.on("before_agent_start", (event, ctx) => {
+	pi.on("before_agent_start", (event) => {
 		if (!enabledForSession) return;
 		flushPendingEntries();
 		const isCompactionContinuation = continueAfterCompaction && requestActive;
@@ -334,9 +315,7 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 			isCompactionContinuation,
 		));
 		requestMarker = buildRequestMarker(!startReceived, !recapReceived);
-		working = true;
-		lastCtx = ctx;
-		paintTitle(ctx);
+		titleController.setWorking(true);
 		return { systemPrompt: `${event.systemPrompt}\n\n${protocolPrompt}` };
 	});
 
@@ -349,20 +328,18 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 		return messages ? { messages } : undefined;
 	});
 
-	pi.on("message_update", (event, ctx) => {
+	pi.on("message_update", (event) => {
 		if (!enabledForSession || !isAssistantMessage(event.message)) return;
 		applyRecords(
 			extractUiMetaRecords(assistantText(event.message), limits),
-			ctx,
 			false,
 		);
 	});
 
-	pi.on("message_end", (event, ctx) => {
+	pi.on("message_end", (event) => {
 		if (!enabledForSession || !isAssistantMessage(event.message)) return;
 		applyRecords(
 			extractUiMetaRecords(assistantText(event.message), limits),
-			ctx,
 			canCommitUiMetaRecap(
 				event.message.stopReason,
 				event.message.content.some((entry) => entry.type === "toolCall"),
@@ -383,11 +360,10 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 		requestActive = false;
 		requestMarker = "";
 		continueAfterCompaction = false;
-		working = false;
-		paintTitle(ctx);
+		titleController.setWorking(false);
 	});
 
-	pi.on("session_info_changed", (event, ctx) => {
+	pi.on("session_info_changed", (event) => {
 		if (!enabledForSession || !config.sessionName.enabled) return;
 		const name = event.name?.trim();
 		if (!name) {
@@ -405,7 +381,6 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 			manualSessionNameLocked = true;
 			stateDirty = true;
 		}
-		paintTitle(ctx);
 	});
 
 	pi.on("session_compact", (event) => {
@@ -418,18 +393,15 @@ export function registerUiMeta(pi: ExtensionAPI, config: UiMetaConfig): void {
 		flushPendingEntries();
 		continueAfterCompaction = false;
 		restoreState(ctx);
-		paintTitle(ctx);
 	});
 
-	pi.on("session_shutdown", (_event, ctx) => {
+	pi.on("session_shutdown", () => {
 		if (enabledForSession) flushPendingEntries();
-		working = false;
-		paintTitle(ctx);
+		titleController.setWorking(false);
 		enabledForSession = false;
 		requestActive = false;
 		requestMarker = "";
 		continueAfterCompaction = false;
 		pendingAutoSessionName = undefined;
-		lastCtx = undefined;
 	});
 }

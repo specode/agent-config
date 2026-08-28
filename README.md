@@ -66,6 +66,7 @@
 
 - compact paste：图片显示为 `[Image N]`，长文本显示为 `[Paste N · size]`；光标移入图片占位符时异步读取并缓存终端图片预览，Kitty 协议仅预览 PNG，提交时仍由 Pi 原生粘贴注册表展开。
 - tool activity：临时 widget 投影工具进度，不替换工具执行或正式 transcript renderer。
+- work animation：隐藏 Pi 原生工作行，在编辑器附近显示工作小人，并与 UI Meta 共用标题控制器；`/work-animation on|off|status` 可切换和查看状态。
 - statusline：可配置 segment 顺序、溢出策略和扩展状态过滤；`/statusline` 可切回 Pi 默认 footer。
 - effort：`/effort` 只提供当前模型实际支持的 thinking 档位。
 - turn duration：把耗时作为自定义 transcript entry 写入，但只在交互式 TUI 会话启用。
@@ -76,16 +77,6 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 ### Pi subscription-usage
 
 `harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-subscription-usage` 启用独立 Pi package。它通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-subscription-usage)。
-
-### Pi work-animation
-
-`harnesses/pi/agent/extensions/work-animation.ts` 提供 Pi 工作态动画，配置文件为同目录下的 `work-animation.json`。启用后会隐藏 Pi 原生工作提示行，在编辑器上方显示带英文状态的小人，并在保留原标题的同时为终端标题添加动画前缀。动画随 agent 生命周期自动启停，不提供单独的 demo 模式。
-
-可用命令：
-
-- `/work-animation` 或 `/work-animation status`：查看状态；
-- `/work-animation on`：启用并保存；
-- `/work-animation off`：停用并恢复 Pi 原生工作提示。
 
 ### 未启用的 Pi 配置
 

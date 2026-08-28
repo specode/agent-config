@@ -4,6 +4,11 @@
     "placement": "aboveEditor",
     "maxItems": 6
   },
+  "workAnimation": {
+    "enabled": true,
+    "intervalMs": 180,
+    "placement": "aboveEditor"
+  },
   "compactPaste": {
     "enabled": true
   },

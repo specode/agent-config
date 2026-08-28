@@ -398,6 +398,8 @@ install_managed_group() {
 
 	# shellcheck disable=SC2034 # Read by summary-mode callers after this function returns.
 	INSTALL_MANAGED_CHANGED=0
+	# shellcheck disable=SC2034 # Allows callers to skip post-install migrations after a declined replacement.
+	INSTALL_MANAGED_DECLINED=0
 	: >"$changes_log"
 	managed_entries >"$manifest"
 	if [ ! -s "$manifest" ]; then
@@ -531,6 +533,8 @@ install_managed_group() {
 		case "$answer" in
 		y | Y | yes | YES | Yes) ;;
 		*)
+			# shellcheck disable=SC2034 # Read by harness-specific post-install migrations.
+			INSTALL_MANAGED_DECLINED=1
 			info "$label 已整组保持不变"
 			return 0
 			;;

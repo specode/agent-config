@@ -8,13 +8,14 @@
 | 配置段 | 默认 | 作用 | 运行边界 |
 | --- | --- | --- | --- |
 | `toolActivity` | 开启 | 在编辑器附近投影本轮工具执行状态 | 仅 TUI；`turn_end` 后清空 |
+| `workAnimation` | 开启 | 隐藏原生工作行，显示工作小人并为终端标题添加动画帧 | 仅 TUI；与 UI Meta 共用标题控制器 |
 | `compactPaste` | 开启 | 缩短图片和长文本占位符；光标移入图片占位符时显示预览 | 仅 TUI；需终端图片能力；不兼容时回退 Pi 原生编辑器 |
 | `statusline` | 开启 | 用可组合 segments 替换默认 footer | 仅有 UI 的会话；可用 `/statusline` 临时切换 |
 | `effort` | 开启 | 用 `/effort` 查看或调整模型支持的 thinking 档位 | 选择面板仅 TUI；非 TUI 需显式传档位 |
 | `turnDuration` | 开启 | 在 transcript 中追加 turn 耗时 entry | 仅 TUI；不会发送给模型 |
 | `uiMeta` | 开启 | 从主模型正常响应提取隐藏元数据，驱动标题、Recap 和 session 名称 | 仅 TUI；不发起额外模型请求 |
 
-工具活动只订阅 `tool_execution_*` 生命周期事件，不调用 `registerTool`，因此不会覆盖 Pi 内置工具、远程 operation、SDK 工具或其他扩展注册的工具。持久结果始终由工具自身的原生 transcript renderer 展示。
+工具活动和工作动画只订阅 agent、tool 生命周期事件，不调用 `registerTool`，因此不会覆盖 Pi 内置工具、远程 operation、SDK 工具或其他扩展注册的工具。持久结果始终由工具自身的原生 transcript renderer 展示。UI Meta 提供任务标题，工作动画提供工作态和动画帧，最终由共享标题控制器统一调用 `setTitle()`，避免两个模块互相覆盖。
 
 ## 配置
 
@@ -33,6 +34,9 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `toolActivity.enabled` | boolean | 是否启用工具活动 widget |
 | `toolActivity.placement` | `aboveEditor` \| `belowEditor` | widget 位于编辑器上方或下方 |
 | `toolActivity.maxItems` | 1–20 | 最多展示的最近工具数；默认 6 |
+| `workAnimation.enabled` | boolean | 是否启用工作小人和标题动画；关闭时恢复 Pi 原生工作行 |
+| `workAnimation.intervalMs` | 100–500 | 动画刷新间隔；默认 180ms |
+| `workAnimation.placement` | `aboveEditor` \| `belowEditor` | 工作小人的 widget 位置 |
 | `compactPaste.enabled` | boolean | 是否启用紧凑粘贴占位符 |
 | `statusline.enabled` | boolean | 是否注册自定义 footer |
 | `statusline.overflow` | `drop-right` \| `priority` | 空间不足时从右侧裁剪，或先压缩再按优先级隐藏 |
@@ -49,7 +53,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `uiMeta.sessionName.maxLength` | 8–100 | session 名称最大可见字符数；默认 48 |
 | `uiMeta.sessionName.manualNameLocks` | boolean | 用户手工 `/name` 后是否阻止后续自动覆盖；默认开启 |
 
-配置文件只在扩展加载时读取；修改后使用 `/reload` 或重新启动 Pi。
+配置文件只在扩展加载时读取；修改后使用 `/reload` 或重新启动 Pi。首次从独立 `work-animation` 迁移时，安装脚本会继承旧配置中的开关、刷新间隔和 widget 位置，再把旧 `.ts`/`.json` 移入可恢复备份，避免重复加载。
 
 ## 图片预览
 
@@ -81,6 +85,12 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 其他本地扩展可通过 `session-ui/statusline/register/v1` 事件注册 segment；只有同时出现在 `statusline.segments` 中的 ID 才会展示。未知 ID 会在 session 启动时提示并跳过。
 
 ## 命令
+
+### `/work-animation [on|off|status]`
+
+- `/work-animation`、`/work-animation status`：显示开关、刷新间隔和 widget 位置。
+- `/work-animation on`：启用工作小人和标题动画，并写回当前 `session-ui` 配置。
+- `/work-animation off`：关闭动画、恢复 Pi 原生工作行，并写回当前 `session-ui` 配置。
 
 ### `/effort [level|status]`
 
@@ -120,8 +130,11 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 ```bash
 node --test \
   harnesses/pi/agent/extensions/session-ui/compact-paste.test.ts \
+  harnesses/pi/agent/extensions/session-ui/config.test.ts \
   harnesses/pi/agent/extensions/session-ui/statusline-core.test.ts \
-  harnesses/pi/agent/extensions/session-ui/ui-meta-core.test.ts
+  harnesses/pi/agent/extensions/session-ui/title-controller.test.ts \
+  harnesses/pi/agent/extensions/session-ui/ui-meta-core.test.ts \
+  harnesses/pi/agent/extensions/session-ui/work-animation.test.ts
 ```
 
 可以用已安装的 Pi 做只加载检查：
@@ -132,4 +145,4 @@ pi --no-extensions --offline \
   --list-models grok-4.6
 ```
 
-测试覆盖 compact paste 的图片路径、MIME/协议边界、大小格式和 marker 间距，statusline 核心布局、glob 过滤、未知 segment、MCP status 解码，以及 UI Meta 解析、清理、截断和流式隐藏；图片 Overlay 的真实终端绘制、`/effort` 交互、工具并发投影、真实 TUI footer、真实模型协议遵循度、自动/手工 session 名称切换、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。
+测试覆盖 compact paste 的图片路径、MIME/协议边界、大小格式和 marker 间距，workAnimation 配置解析，statusline 核心布局、glob 过滤、未知 segment、MCP status 解码，标题组合状态，UI Meta 解析、清理、截断和流式隐藏，以及工作动画的工具阶段映射和组合配置写回；图片 Overlay 的真实终端绘制、动画定时器和标题切换、`/effort` 交互、工具并发投影、真实 TUI footer、真实模型协议遵循度、自动/手工 session 名称切换、compaction continuation 和跨 session 生命周期仍需要人工或集成验证。

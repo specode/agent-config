@@ -10,6 +10,11 @@ export interface SessionUiConfig {
 		placement: WidgetPlacement;
 		maxItems: number;
 	};
+	workAnimation: {
+		enabled: boolean;
+		intervalMs: number;
+		placement: WidgetPlacement;
+	};
 	compactPaste: {
 		enabled: boolean;
 	};
@@ -50,6 +55,11 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		enabled: true,
 		placement: "aboveEditor",
 		maxItems: 6,
+	},
+	workAnimation: {
+		enabled: true,
+		intervalMs: 180,
+		placement: "aboveEditor",
 	},
 	compactPaste: {
 		enabled: true,
@@ -170,6 +180,7 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	}
 
 	const toolActivity = objectValue(raw.toolActivity);
+	const workAnimation = objectValue(raw.workAnimation);
 	const compactPaste = objectValue(raw.compactPaste);
 	const statusline = objectValue(raw.statusline);
 	const extensionStatuses = objectValue(statusline.extensionStatuses);
@@ -189,6 +200,18 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 			placement = toolActivity.placement;
 		} else {
 			warnings.push("toolActivity.placement must be aboveEditor or belowEditor");
+		}
+	}
+
+	let animationPlacement = DEFAULT_SESSION_UI_CONFIG.workAnimation.placement;
+	if (workAnimation.placement !== undefined) {
+		if (
+			workAnimation.placement === "aboveEditor" ||
+			workAnimation.placement === "belowEditor"
+		) {
+			animationPlacement = workAnimation.placement;
+		} else {
+			warnings.push("workAnimation.placement must be aboveEditor or belowEditor");
 		}
 	}
 
@@ -233,6 +256,23 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				20,
 				warnings,
 			),
+		},
+		workAnimation: {
+			enabled: booleanValue(
+				workAnimation.enabled,
+				DEFAULT_SESSION_UI_CONFIG.workAnimation.enabled,
+				"workAnimation.enabled",
+				warnings,
+			),
+			intervalMs: boundedInteger(
+				workAnimation.intervalMs,
+				DEFAULT_SESSION_UI_CONFIG.workAnimation.intervalMs,
+				"workAnimation.intervalMs",
+				100,
+				500,
+				warnings,
+			),
+			placement: animationPlacement,
 		},
 		compactPaste: {
 			enabled: booleanValue(
