@@ -23,7 +23,7 @@
 ./install-harness.sh --list
 ```
 
-每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，安装中途失败会自动回滚。`install-rules.sh` 仍会在规则冲突时显示具体差异。
+每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，安装中途失败会自动回滚。安装 Pi 配置时还会清理已停用的 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`。`install-rules.sh` 仍会在规则冲突时显示具体差异。
 
 ## 2. 前置依赖
 
@@ -73,6 +73,10 @@
 - UI Meta：复用主模型正常响应中的隐藏 `turn_start` / `turn_end` 元数据更新终端标题、写入 Recap，并在高层目标切换时更新 session 名称；不发起额外模型请求。
 
 UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
+
+### 已停用的 Pi image-gen
+
+仓库不再提供或安装独立的 `image-gen.ts` 扩展。运行 `./install-harness.sh pi` 时，如本机仍存在 `~/.pi/agent/extensions/image-gen.ts`，安装器会将它移出 Pi 扩展目录并备份到 `~/.agent-config-backups/<时间>/pi-retired/`。
 
 ### Pi subscription-usage
 

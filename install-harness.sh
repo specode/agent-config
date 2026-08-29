@@ -124,6 +124,25 @@ retire_legacy_pi_work_animation() {
 	fi
 }
 
+retire_removed_pi_image_gen() {
+	[ "${INSTALL_MANAGED_DECLINED:-0}" -eq 0 ] || return 0
+
+	local relative_path='.pi/agent/extensions/image-gen.ts'
+	local target_path="$AGENT_CONFIG_INSTALL_HOME/$relative_path"
+	local backup_path="$BACKUP_ROOT/pi-retired/$relative_path"
+
+	if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
+		return 0
+	fi
+
+	mkdir -p "$(dirname "$backup_path")"
+	mv "$target_path" "$backup_path"
+	INSTALL_MANAGED_CHANGED=1
+	# shellcheck disable=SC2034 # Shared installer state used for backup reporting.
+	BACKUP_CREATED=1
+	info "已停用的 image-gen 插件已从本机移除，原文件已迁移到备份"
+}
+
 if [ "${1:-}" = '--list' ]; then
 	printf '%s\n' 'claude-code' 'pi'
 	exit 0
@@ -158,7 +177,6 @@ pi)
 			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
-			'harnesses/pi/agent/extensions/image-gen.ts|.pi/agent/extensions/image-gen.ts|file|-|插件|image-gen' \
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
 			'harnesses/pi/web-search.json|.pi/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
@@ -178,6 +196,7 @@ esac
 install_managed_group "$HARNESS_ID" "$HARNESS_LABEL"
 if [ "$HARNESS_ID" = 'pi' ]; then
 	retire_legacy_pi_work_animation
+	retire_removed_pi_image_gen
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
 	success "$HARNESS_LABEL 配置安装完成"
