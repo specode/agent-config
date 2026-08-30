@@ -23,7 +23,7 @@
 ./install-harness.sh --list
 ```
 
-每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，安装中途失败会自动回滚。安装 Pi 配置时还会清理已停用的 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`。`install-rules.sh` 仍会在规则冲突时显示具体差异。
+每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，安装中途失败会自动回滚。安装 Pi 配置时还会清理旧的本地 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`，改由 `npm:@specode/pi-subscription-image` 提供生图能力。`install-rules.sh` 仍会在规则冲突时显示具体差异。
 
 ## 2. 前置依赖
 
@@ -74,13 +74,13 @@
 
 UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
 
-### 已停用的 Pi image-gen
-
-仓库不再提供或安装独立的 `image-gen.ts` 扩展。运行 `./install-harness.sh pi` 时，如本机仍存在 `~/.pi/agent/extensions/image-gen.ts`，安装器会将它移出 Pi 扩展目录并备份到 `~/.agent-config-backups/<时间>/pi-retired/`。
-
 ### Pi subscription-usage
 
 `harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-subscription-usage` 启用独立 Pi package。它通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-subscription-usage)。
+
+### Pi subscription-image
+
+`harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-subscription-image` 启用独立 Pi package。它提供统一的 `generate_image` 工具和 `/img` 命令，使用现有 Codex 与 Grok 订阅账户额度生成或编辑图片；`openai-codex/*` 会话自动走 Codex，`xai/*` 会话自动走 Grok，其他会话需显式指定 provider。默认保存到 `~/.pi/agent/generated-images/`，可选磁盘保存失败时仍返回内联图片。插件不自行保存凭据。运行 `./install-harness.sh pi` 时，如本机仍存在旧的 `~/.pi/agent/extensions/image-gen.ts`，安装器会将它移出并备份到 `~/.agent-config-backups/<时间>/pi-retired/`。详细行为和安全边界见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-subscription-image)。
 
 ### 未启用的 Pi 配置
 

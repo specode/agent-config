@@ -27,6 +27,7 @@
 		"npm:@specode/pi-kimi-webbridge-bootstrap",
 		"npm:@specode/pi-last-model-effort",
 		"npm:@specode/pi-subscription-usage",
+		"npm:@specode/pi-subscription-image",
 		"npm:@diegopetrucci/pi-openai-fast",
 		"npm:pi-antigravity",
 		"npm:@ff-labs/pi-fff"

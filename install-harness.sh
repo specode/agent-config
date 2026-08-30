@@ -140,7 +140,7 @@ retire_removed_pi_image_gen() {
 	INSTALL_MANAGED_CHANGED=1
 	# shellcheck disable=SC2034 # Shared installer state used for backup reporting.
 	BACKUP_CREATED=1
-	info "已停用的 image-gen 插件已从本机移除，原文件已迁移到备份"
+	info "旧的本地 image-gen 扩展已迁移到备份，功能改由 npm:@specode/pi-subscription-image 提供"
 }
 
 if [ "${1:-}" = '--list' ]; then
