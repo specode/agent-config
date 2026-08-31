@@ -1,0 +1,42 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "scout": {
+        "model": "kimi-coding/k3:max",
+        "fallbackModels": [
+          "openai-codex/gpt-5.6-sol:xhigh"
+        ]
+      },
+      "delegate": {
+        "model": "openai-codex/gpt-5.6-sol:xhigh",
+        "fallbackModels": [
+          "kimi-coding/k3:max"
+        ]
+      },
+      "researcher": {
+        "model": "xai/grok-4.6:xhigh",
+        "fallbackModels": [
+          "kimi-coding/k3:max"
+        ]
+      },
+      "worker": {
+        "model": "openai-codex/gpt-5.6-sol:xhigh",
+        "fallbackModels": [
+          "xai/grok-4.6:xhigh"
+        ]
+      },
+      "reviewer": {
+        "model": "xai/grok-4.6:xhigh",
+        "fallbackModels": [
+          "openai-codex/gpt-5.6-sol:xhigh"
+        ]
+      },
+      "oracle": {
+        "model": "openai-codex/gpt-5.6-sol:xhigh",
+        "fallbackModels": [
+          "xai/grok-4.6:xhigh"
+        ]
+      }
+    }
+  }
+}

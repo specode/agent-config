@@ -57,6 +57,10 @@
 
 `harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-last-model-effort` 启用独立 Pi package。它会按模型记住最近实际使用的 thinking / reasoning effort，切换回来时自动恢复，并在新建会话时恢复最近模型；`pi -c`、`/resume`、fork 和显式 CLI 参数仍保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库，也不改写 Pi 的 `modelThinkingLevels`。详细行为见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-last-model-effort)。
 
+### Pi 多模型 Profile
+
+`harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 为 `pi-subagents` 提供本地多模型角色映射：Kimi K3 `max` 负责侦察，GPT-5.6 Sol `xhigh` 负责实现与推理，Grok 4.6 `xhigh` 负责研究和审核。`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射；安装或更新后在 Pi 中运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。
+
 ### Pi session-ui
 
 `harnesses/pi/agent/extensions/session-ui.ts` 是唯一入口，负责按配置装配

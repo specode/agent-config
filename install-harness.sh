@@ -178,6 +178,7 @@ pi)
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
+			'harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
 			'harnesses/pi/web-search.json|.pi/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
 	}
