@@ -2,7 +2,7 @@
   "subagents": {
     "agentOverrides": {
       "scout": {
-        "model": "kimi-coding/k3:max",
+        "model": "kimi-coding/k3:high",
         "fallbackModels": [
           "openai-codex/gpt-5.6-sol:xhigh"
         ]
