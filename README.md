@@ -61,6 +61,10 @@
 
 `harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 为 `pi-subagents` 提供本地多模型角色映射：Kimi K3 `max` 负责侦察，GPT-5.6 Sol `xhigh` 负责实现与推理，Grok 4.6 `xhigh` 负责研究和审核。`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射；安装或更新后在 Pi 中运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。
 
+### Pi 子代理策略
+
+多模型 Profile 禁用 `claude-code`、`codex-exec`、`cursor-agent` 及其 writer 变体，避免只使用 Pi 模型时误调本机外部 CLI；禁用项会在手动执行 `/subagents-load-profile multimodel-ggk` 时与模型角色映射一起写入用户 settings。`harnesses/pi/agent/extensions/subagent/config.json` 将模型失败排除时间设为 10 秒，既避免同一轮并发任务反复撞击暂时故障的模型，又不会因一次连接错误长时间跳过模型。
+
 ### Pi session-ui
 
 `harnesses/pi/agent/extensions/session-ui.ts` 是唯一入口，负责按配置装配
