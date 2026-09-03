@@ -12,8 +12,8 @@
 	"collapseChangelog": true,
 	"showHardwareCursor": true,
 	"autocompleteMaxVisible": 8,
-	"steeringMode": "one-at-a-time",
-	"followUpMode": "one-at-a-time",
+	"steeringMode": "all",
+	"followUpMode": "all",
 	"compaction": {
 		"keepRecentTokens": 40000
 	},
