@@ -1,63 +1,63 @@
 {
-  "toolActivity": {
-    "enabled": true,
-    "placement": "aboveEditor",
-    "maxItems": 6
-  },
-  "workAnimation": {
-    "enabled": true,
-    "intervalMs": 180,
-    "placement": "aboveEditor"
-  },
-  "compactPaste": {
-    "enabled": true
-  },
-  "statusline": {
-    "enabled": true,
-    "overflow": "drop-right",
-    "segments": [
-      "model",
-      "effort",
-      "directory",
-      "branch",
-      "context",
-      "usage",
-      "tokens",
-      "cache",
-      "cost",
-      "mcp",
-      "extensions"
-    ],
-    "extensionStatuses": {
-      "exclude": [
-        "pi-lens-lsp",
-        "openai-fast",
-        "mcp",
-        "mcp-*",
-        "subscription-usage"
-      ]
-    }
-  },
-  "effort": {
-    "enabled": true
-  },
-  "turnDuration": {
-    "enabled": true
-  },
-  "uiMeta": {
-    "enabled": true,
-    "title": {
-      "enabled": true,
-      "maxLength": 36
-    },
-    "recap": {
-      "enabled": true,
-      "maxLength": 120
-    },
-    "sessionName": {
-      "enabled": true,
-      "maxLength": 48,
-      "manualNameLocks": true
-    }
-  }
+	"toolActivity": {
+		"enabled": true,
+		"placement": "aboveEditor",
+		"maxItems": 6
+	},
+	"workAnimation": {
+		"enabled": true,
+		"intervalMs": 180,
+		"placement": "aboveEditor"
+	},
+	"compactPaste": {
+		"enabled": true
+	},
+	"statusline": {
+		"enabled": true,
+		"overflow": "drop-right",
+		"segments": [
+			"model",
+			"effort",
+			"directory",
+			"branch",
+			"context",
+			"usage",
+			"tokens",
+			"cache",
+			"cost",
+			"mcp",
+			"extensions"
+		],
+		"extensionStatuses": {
+			"exclude": [
+				"pi-lens-lsp",
+				"openai-fast",
+				"mcp",
+				"mcp-*",
+				"subscription-usage"
+			]
+		}
+	},
+	"effort": {
+		"enabled": true
+	},
+	"turnDuration": {
+		"enabled": true
+	},
+	"uiMeta": {
+		"enabled": true,
+		"title": {
+			"enabled": true,
+			"maxLength": 36
+		},
+		"recap": {
+			"enabled": true,
+			"maxLength": 120
+		},
+		"sessionName": {
+			"enabled": true,
+			"maxLength": 48,
+			"manualNameLocks": true
+		}
+	}
 }

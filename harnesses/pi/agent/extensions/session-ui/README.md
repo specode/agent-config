@@ -5,15 +5,15 @@
 
 ## 模块
 
-| 配置段 | 默认 | 作用 | 运行边界 |
-| --- | --- | --- | --- |
-| `toolActivity` | 开启 | 在编辑器附近投影本轮工具执行状态 | 仅 TUI；`turn_end` 后清空 |
-| `workAnimation` | 开启 | 隐藏原生工作行，显示工作小人并为终端标题添加动画帧 | 仅 TUI；与 UI Meta 共用标题控制器 |
-| `compactPaste` | 开启 | 缩短图片和长文本占位符；光标移入图片占位符时显示预览 | 仅 TUI；需终端图片能力；不兼容时回退 Pi 原生编辑器 |
-| `statusline` | 开启 | 用可组合 segments 替换默认 footer | 仅有 UI 的会话；可用 `/statusline` 临时切换 |
-| `effort` | 开启 | 用 `/effort` 查看或调整模型支持的 thinking 档位 | 选择面板仅 TUI；非 TUI 需显式传档位 |
-| `turnDuration` | 开启 | 在 transcript 中追加 turn 耗时 entry | 仅 TUI；不会发送给模型 |
-| `uiMeta` | 开启 | 从主模型正常响应提取隐藏元数据，驱动标题、Recap 和 session 名称 | 仅 TUI；不发起额外模型请求 |
+| 配置段          | 默认 | 作用                                                            | 运行边界                                           |
+| --------------- | ---- | --------------------------------------------------------------- | -------------------------------------------------- |
+| `toolActivity`  | 开启 | 在编辑器附近投影本轮工具执行状态                                | 仅 TUI；`turn_end` 后清空                          |
+| `workAnimation` | 开启 | 隐藏原生工作行，显示工作小人并为终端标题添加动画帧              | 仅 TUI；与 UI Meta 共用标题控制器                  |
+| `compactPaste`  | 开启 | 缩短图片和长文本占位符；光标移入图片占位符时显示预览            | 仅 TUI；需终端图片能力；不兼容时回退 Pi 原生编辑器 |
+| `statusline`    | 开启 | 用可组合 segments 替换默认 footer                               | 仅有 UI 的会话；可用 `/statusline` 临时切换        |
+| `effort`        | 开启 | 用 `/effort` 查看或调整模型支持的 thinking 档位                 | 选择面板仅 TUI；非 TUI 需显式传档位                |
+| `turnDuration`  | 开启 | 在 transcript 中追加 turn 耗时 entry                            | 仅 TUI；不会发送给模型                             |
+| `uiMeta`        | 开启 | 从主模型正常响应提取隐藏元数据，驱动标题、Recap 和 session 名称 | 仅 TUI；不发起额外模型请求                         |
 
 工具活动和工作动画只订阅 agent、tool 生命周期事件，不调用 `registerTool`，因此不会覆盖 Pi 内置工具、远程 operation、SDK 工具或其他扩展注册的工具。持久结果始终由工具自身的原生 transcript renderer 展示。UI Meta 提供任务标题，工作动画提供工作态和动画帧，最终由共享标题控制器统一调用 `setTitle()`，避免两个模块互相覆盖。
 
@@ -29,29 +29,29 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 ### 顶层配置项
 
-| 路径 | 类型/范围 | 说明 |
-| --- | --- | --- |
-| `toolActivity.enabled` | boolean | 是否启用工具活动 widget |
-| `toolActivity.placement` | `aboveEditor` \| `belowEditor` | widget 位于编辑器上方或下方 |
-| `toolActivity.maxItems` | 1–20 | 最多展示的最近工具数；默认 6 |
-| `workAnimation.enabled` | boolean | 是否启用工作小人和标题动画；关闭时恢复 Pi 原生工作行 |
-| `workAnimation.intervalMs` | 100–500 | 动画刷新间隔；默认 180ms |
-| `workAnimation.placement` | `aboveEditor` \| `belowEditor` | 工作小人的 widget 位置 |
-| `compactPaste.enabled` | boolean | 是否启用紧凑粘贴占位符 |
-| `statusline.enabled` | boolean | 是否注册自定义 footer |
-| `statusline.overflow` | `drop-right` \| `priority` | 空间不足时从右侧裁剪，或先压缩再按优先级隐藏 |
-| `statusline.segments` | string[] | segment 的顺序与显隐；重复 ID 会去重 |
-| `statusline.extensionStatuses.exclude` | string[] | 过滤 extension status ID；支持 `*` 通配符 |
-| `effort.enabled` | boolean | 是否注册 `/effort` |
-| `turnDuration.enabled` | boolean | 是否在 TUI transcript 中记录耗时 |
-| `uiMeta.enabled` | boolean | 是否启用统一的隐藏 UI 元数据协议 |
-| `uiMeta.title.enabled` | boolean | 是否按最近一轮任务更新终端标题 |
-| `uiMeta.title.maxLength` | 8–80 | 标题最大可见字符数；默认 36 |
-| `uiMeta.recap.enabled` | boolean | 是否把本轮实际结果写为 transcript entry |
-| `uiMeta.recap.maxLength` | 20–240 | Recap 最大可见字符数；默认 120 |
-| `uiMeta.sessionName.enabled` | boolean | 是否按会话最新高层目标自动更新 session 名称 |
-| `uiMeta.sessionName.maxLength` | 8–100 | session 名称最大可见字符数；默认 48 |
-| `uiMeta.sessionName.manualNameLocks` | boolean | 用户手工 `/name` 后是否阻止后续自动覆盖；默认开启 |
+| 路径                                   | 类型/范围                      | 说明                                                 |
+| -------------------------------------- | ------------------------------ | ---------------------------------------------------- |
+| `toolActivity.enabled`                 | boolean                        | 是否启用工具活动 widget                              |
+| `toolActivity.placement`               | `aboveEditor` \| `belowEditor` | widget 位于编辑器上方或下方                          |
+| `toolActivity.maxItems`                | 1–20                           | 最多展示的最近工具数；默认 6                         |
+| `workAnimation.enabled`                | boolean                        | 是否启用工作小人和标题动画；关闭时恢复 Pi 原生工作行 |
+| `workAnimation.intervalMs`             | 100–500                        | 动画刷新间隔；默认 180ms                             |
+| `workAnimation.placement`              | `aboveEditor` \| `belowEditor` | 工作小人的 widget 位置                               |
+| `compactPaste.enabled`                 | boolean                        | 是否启用紧凑粘贴占位符                               |
+| `statusline.enabled`                   | boolean                        | 是否注册自定义 footer                                |
+| `statusline.overflow`                  | `drop-right` \| `priority`     | 空间不足时从右侧裁剪，或先压缩再按优先级隐藏         |
+| `statusline.segments`                  | string[]                       | segment 的顺序与显隐；重复 ID 会去重                 |
+| `statusline.extensionStatuses.exclude` | string[]                       | 过滤 extension status ID；支持 `*` 通配符            |
+| `effort.enabled`                       | boolean                        | 是否注册 `/effort`                                   |
+| `turnDuration.enabled`                 | boolean                        | 是否在 TUI transcript 中记录耗时                     |
+| `uiMeta.enabled`                       | boolean                        | 是否启用统一的隐藏 UI 元数据协议                     |
+| `uiMeta.title.enabled`                 | boolean                        | 是否按最近一轮任务更新终端标题                       |
+| `uiMeta.title.maxLength`               | 8–80                           | 标题最大可见字符数；默认 36                          |
+| `uiMeta.recap.enabled`                 | boolean                        | 是否把本轮实际结果写为 transcript entry              |
+| `uiMeta.recap.maxLength`               | 20–240                         | Recap 最大可见字符数；默认 120                       |
+| `uiMeta.sessionName.enabled`           | boolean                        | 是否按会话最新高层目标自动更新 session 名称          |
+| `uiMeta.sessionName.maxLength`         | 8–100                          | session 名称最大可见字符数；默认 48                  |
+| `uiMeta.sessionName.manualNameLocks`   | boolean                        | 用户手工 `/name` 后是否阻止后续自动覆盖；默认开启    |
 
 配置文件只在扩展加载时读取；修改后使用 `/reload` 或重新启动 Pi。首次从独立 `work-animation` 迁移时，安装脚本会继承旧配置中的开关、刷新间隔和 widget 位置，再把旧 `.ts`/`.json` 移入可恢复备份，避免重复加载。
 
@@ -65,20 +65,20 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 内置 segment 如下：
 
-| ID | 内容 |
-| --- | --- |
-| `model` | 当前模型；启用 openai-fast 时附加 `fast` |
-| `effort` | 当前 thinking 档位；`off` 时隐藏 |
-| `directory` | 当前工作目录 |
-| `session` | session 名称；默认配置未启用 |
-| `branch` | Git branch |
-| `context` | context 使用率和窗口大小 |
-| `usage` | 读取 `subscription-usage/status/v1` 结构化数据，在 context 后显示 Nerd Font 窗口图标与插件当前模式对应的百分比；颜色仍按剩余额度告警，不显示 Provider 和重置倒计时，顺序固定为 5h / 1w / 1m |
-| `tokens` | session 输入/输出 token |
-| `cache` | 当前轮、最近五轮和 session cache hit rate |
-| `cost` | session 成本；订阅模型显示 `$0.000` |
-| `mcp` | MCP 已连接/已启用数量和可用的 server 名称 |
-| `extensions` | 未被 exclude 过滤的其他 extension statuses |
+| ID           | 内容                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model`      | 当前模型；启用 openai-fast 时附加 `fast`                                                                                                                                                    |
+| `effort`     | 当前 thinking 档位；`off` 时隐藏                                                                                                                                                            |
+| `directory`  | 当前工作目录                                                                                                                                                                                |
+| `session`    | session 名称；默认配置未启用                                                                                                                                                                |
+| `branch`     | Git branch                                                                                                                                                                                  |
+| `context`    | context 使用率和窗口大小                                                                                                                                                                    |
+| `usage`      | 读取 `subscription-usage/status/v1` 结构化数据，在 context 后显示 Nerd Font 窗口图标与插件当前模式对应的百分比；颜色仍按剩余额度告警，不显示 Provider 和重置倒计时，顺序固定为 5h / 1w / 1m |
+| `tokens`     | session 输入/输出 token                                                                                                                                                                     |
+| `cache`      | 当前轮、最近五轮和 session cache hit rate                                                                                                                                                   |
+| `cost`       | session 成本；订阅模型显示 `$0.000`                                                                                                                                                         |
+| `mcp`        | MCP 已连接/已启用数量和可用的 server 名称                                                                                                                                                   |
+| `extensions` | 未被 exclude 过滤的其他 extension statuses                                                                                                                                                  |
 
 `model` 与 `effort`、`directory` 与 `branch` 相邻展示时只用一个空格连接，其余 segment 使用 Powerline 分隔符。`drop-right` 保持配置顺序，并从右侧移除放不下的 segment。`priority` 会先使用 segment 的紧凑形式，再隐藏低优先级且非必需的 segment。最终输出仍会按终端可见宽度截断。
 

@@ -1,28 +1,28 @@
 {
-  "permissions": {
-    "defaultMode": "auto"
-  },
-  "model": "claude-fable-5[1m]",
-  "statusLine": {
-    "type": "command",
-    "command": "bash \"$HOME/.claude/statusline-command.sh\""
-  },
-  "enabledPlugins": {
-    "swift-lsp@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true,
-    "codex@openai-codex": true
-  },
-  "extraKnownMarketplaces": {
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    }
-  },
-  "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true,
-  "theme": "auto",
-  "autoCompactEnabled": true,
-  "agentPushNotifEnabled": true
+	"permissions": {
+		"defaultMode": "auto"
+	},
+	"model": "claude-fable-5[1m]",
+	"statusLine": {
+		"type": "command",
+		"command": "bash \"$HOME/.claude/statusline-command.sh\""
+	},
+	"enabledPlugins": {
+		"swift-lsp@claude-plugins-official": true,
+		"gopls-lsp@claude-plugins-official": true,
+		"codex@openai-codex": true
+	},
+	"extraKnownMarketplaces": {
+		"openai-codex": {
+			"source": {
+				"source": "github",
+				"repo": "openai/codex-plugin-cc"
+			}
+		}
+	},
+	"effortLevel": "high",
+	"skipDangerousModePermissionPrompt": true,
+	"theme": "auto",
+	"autoCompactEnabled": true,
+	"agentPushNotifEnabled": true
 }

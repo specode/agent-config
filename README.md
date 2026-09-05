@@ -59,7 +59,7 @@
 
 ### Pi 多模型 Profile
 
-`harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 为 `pi-subagents` 提供本地多模型角色映射：Kimi K3 `max` 负责侦察，GPT-5.6 Sol `xhigh` 负责实现与推理，Grok 4.6 `xhigh` 负责研究和审核。`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射；安装或更新后在 Pi 中运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。
+`harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 为 `pi-subagents` 提供本地多模型角色映射：Kimi K3 `high` 负责侦察，GPT-6 Astra `xhigh`/`max` 负责实现与推理，Grok 4.6 `high` 负责研究和审核，GPT-5.6 Sol 与 K3 `max` 作为兑底。`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射；安装或更新后在 Pi 中运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。
 
 ### Pi 子代理策略
 
