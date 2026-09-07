@@ -1,4 +1,5 @@
 {
+	"timeoutMs": 7200000,
 	"modelExclusions": {
 		"defaultTtlMs": 10000
 	}
