@@ -79,8 +79,8 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 | ID           | 内容                                                                                                                                                                                        |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`      | 当前模型；本地 OpenAI Fast 开启且适配时仅显示 `fast`，否则隐藏；细节通过 `/fast status` 查询                                                                                                                                                    |
-| `effort`     | 当前 thinking 档位；`off` 时隐藏                                                                                                                                                            |
+| `model`      | 当前模型                                                                                                                                                    |
+| `effort`     | 当前 thinking 档位，其后显示绿色加粗 `fast`；thinking 为 `off` 时隐藏档位，但保留已启用且适配的 `fast`                                                                                                                                                            |
 | `directory`  | 当前工作目录                                                                                                                                                                                |
 | `session`    | session 名称；默认配置未启用                                                                                                                                                                |
 | `branch`     | Git branch                                                                                                                                                                                  |
@@ -91,6 +91,8 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `cost`       | session 成本；订阅模型显示 `$0.000`                                                                                                                                                         |
 | `mcp`        | MCP 已连接/已启用数量和可用的 server 名称                                                                                                                                                   |
 | `extensions` | 未被 exclude 过滤的其他 extension statuses                                                                                                                                                  |
+
+默认顺序为“模型 → 思考等级 → `fast`”，`fast` 沿用绿色加粗样式，与思考等级间隔一个空格。Fast 的适配与开关由 OpenAI Fast 插件负责，详情通过 `/fast status` 查询；session-ui 仅将标记附在 `effort` 段后，不将其插入模型与思考等级之间。
 
 `model` 与 `effort`、`directory` 与 `branch` 相邻展示时只用一个空格连接，其余 segment 使用 Powerline 分隔符。`drop-right` 保持配置顺序，并从右侧移除放不下的 segment。`priority` 会先使用 segment 的紧凑形式，再隐藏低优先级且非必需的 segment。最终输出仍会按终端可见宽度截断。
 

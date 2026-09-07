@@ -143,6 +143,85 @@ retire_removed_pi_image_gen() {
 	info "旧的本地 image-gen 扩展已迁移到备份，功能改由 npm:@specode/pi-subscription-image 提供"
 }
 
+legacy_pi_openai_fast_present() {
+	local agent_dir="$1"
+	local package_name='@diegopetrucci/pi-openai-fast'
+	local package_dir="$agent_dir/npm/node_modules/$package_name"
+	local npm_manifest="$agent_dir/npm/package.json"
+	if [ -e "$package_dir" ] || [ -L "$package_dir" ]; then
+		printf '1'
+		return 0
+	fi
+	if [ ! -f "$npm_manifest" ]; then
+		printf '0'
+		return 0
+	fi
+	if ! command -v node >/dev/null 2>&1; then
+		error '检查旧 OpenAI Fast 安装需要 node；新配置已安装，请补齐后重试'
+		return 1
+	fi
+	node - "$npm_manifest" "$package_name" <<'NODE'
+const fs = require("node:fs");
+try {
+	const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+	const name = process.argv[3];
+	const declared = ["dependencies", "devDependencies", "optionalDependencies"]
+		.some((key) => manifest?.[key] && Object.hasOwn(manifest[key], name));
+	process.stdout.write(declared ? "1" : "0");
+} catch {
+	console.error("Cannot read the Pi npm manifest; package cleanup was not attempted");
+	process.exitCode = 1;
+}
+NODE
+}
+
+retire_removed_pi_openai_fast() {
+	[ "${INSTALL_MANAGED_DECLINED:-0}" -eq 0 ] || return 0
+
+	local agent_dir="$AGENT_CONFIG_INSTALL_HOME/.pi/agent"
+	local package_name='@diegopetrucci/pi-openai-fast'
+	local package_dir="$agent_dir/npm/node_modules/$package_name"
+	local backup_dir="$BACKUP_ROOT/pi-retired/openai-fast-package"
+	local present name remove_status=0
+	present="$(legacy_pi_openai_fast_present "$agent_dir")"
+	[ "$present" = '1' ] || return 0
+
+	if ! command -v pi >/dev/null 2>&1; then
+		error '卸载旧 OpenAI Fast 需要 pi；新配置已安装，请补齐后重试'
+		return 1
+	fi
+
+	mkdir -p "$backup_dir"
+	for name in package.json package-lock.json; do
+		if [ -f "$agent_dir/npm/$name" ]; then
+			cp -p "$agent_dir/npm/$name" "$backup_dir/$name"
+		fi
+	done
+	if [ -e "$package_dir" ] || [ -L "$package_dir" ]; then
+		cp -Rp "$package_dir" "$backup_dir/previous-package"
+	fi
+	# shellcheck disable=SC2034 # Shared installer state used for backup reporting.
+	BACKUP_CREATED=1
+
+	info "卸载旧插件 npm:$package_name"
+	(
+		cd "$AGENT_CONFIG_INSTALL_HOME" || exit 1
+		PI_CODING_AGENT_DIR="$agent_dir" PI_OFFLINE=1 \
+			npm_config_ignore_scripts=true npm_config_audit=false npm_config_fund=false \
+			pi remove "npm:$package_name" --no-approve
+	) || remove_status=$?
+	present="$(legacy_pi_openai_fast_present "$agent_dir")"
+	if [ "$present" = '1' ]; then
+		error "旧 OpenAI Fast 卸载失败，仍有残留（命令退出码 ${remove_status}）；新配置保留，备份位于 ${backup_dir}。修复后重跑安装器"
+		return 1
+	fi
+	# Pi may return nonzero after successful uninstall when settings were already migrated.
+	if [ "$remove_status" -ne 0 ]; then
+		warn "Pi remove 返回 ${remove_status}；已复核旧包目录及 npm 依赖声明均已移除"
+	fi
+	INSTALL_MANAGED_CHANGED=1
+}
+
 if [ "${1:-}" = '--list' ]; then
 	printf '%s\n' 'claude-code' 'pi'
 	exit 0
@@ -200,6 +279,7 @@ install_managed_group "$HARNESS_ID" "$HARNESS_LABEL"
 if [ "$HARNESS_ID" = 'pi' ]; then
 	retire_legacy_pi_work_animation
 	retire_removed_pi_image_gen
+	retire_removed_pi_openai_fast
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
 	success "$HARNESS_LABEL 配置安装完成"

@@ -23,7 +23,7 @@
 ./install-harness.sh --list
 ```
 
-每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，安装中途失败会自动回滚。安装 Pi 配置时还会清理旧的本地 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`，改由 `npm:@specode/pi-subscription-image` 提供生图能力。`install-rules.sh` 仍会在规则冲突时显示具体差异。
+每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，托管文件部署失败会自动回滚。安装 Pi 配置时还会清理旧的本地 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`，改由 `npm:@specode/pi-subscription-image` 提供生图能力。`install-rules.sh` 仍会在规则冲突时显示具体差异。
 
 ## 2. 前置依赖
 
@@ -84,7 +84,9 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 
 ### Pi OpenAI Fast
 
-`harnesses/pi/agent/extensions/openai-fast/index.ts` 是自维护的本地扩展，由安装器复制整个目录；不再依赖 `npm:@diegopetrucci/pi-openai-fast`。它为 Codex OAuth 请求提供 `/fast [on|off|status]`，开启时按需添加 `service_tier: "priority"`，不限制 GPT 模型版本、不覆盖已有 tier，也不自动重试或修改费用。沿用 `extensions/openai-fast.json`，仓库保留默认开启；会话命令覆盖不持久化，reload、新建或恢复会话时回到配置默认值。状态栏仅在开启且当前通道适配时显示 `fast`，关闭或不适配时隐藏；请求处理细节通过 `/fast status` 查询，开关标记不代表后端确认加速。独立安装、配置与测试见 [OpenAI Fast 文档](harnesses/pi/agent/extensions/openai-fast/README.md)。本扩展按可公开使用的独立插件维护，个人状态栏的定制归 session-ui；首次替换第三方包时，另运行 `pi remove npm:@diegopetrucci/pi-openai-fast` 清理旧安装。
+`harnesses/pi/agent/extensions/openai-fast/index.ts` 是自维护的本地扩展，由安装器复制整个目录；不再依赖 `npm:@diegopetrucci/pi-openai-fast`。它为 Codex OAuth 请求提供 `/fast [on|off|status]`，开启时按需添加 `service_tier: "priority"`，不限制 GPT 模型版本、不覆盖已有 tier，也不自动重试或修改费用。沿用 `extensions/openai-fast.json`，仓库保留默认开启；会话命令覆盖不持久化，reload、新建或恢复会话时回到配置默认值。状态栏仅在开启且当前通道适配时显示 `fast`，关闭或不适配时隐藏；请求处理细节通过 `/fast status` 查询，开关标记不代表后端确认加速。独立安装、配置与测试见 [OpenAI Fast 文档](harnesses/pi/agent/extensions/openai-fast/README.md)。本扩展按可公开使用的独立插件维护，个人状态栏的定制归 session-ui。
+
+安装器在新配置部署成功后，检测并通过 `pi remove npm:@diegopetrucci/pi-openai-fast` 卸载旧包；只操作安装目标下的 Pi agent 目录，卸载前将旧包及 npm 清单备份到 `pi-retired/openai-fast-package/`，并禁用 npm 生命周期脚本。拒绝安装时不卸载，旧包已不存在时不重复调用。仅残留旧包而配置已一致时也会清理。卸载需要可执行的 `pi`，并复核旧包目录及 npm 依赖声明均已移除；Pi 可能因设置项已随配置迁移而返回非零，此时只有复核通过才视为完成。仍有残留则报错并保留新配置和备份，不冒充 npm 操作已回滚，修复后可重跑安装器。
 
 ### Pi subscription-usage
 
@@ -105,3 +107,11 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 `harnesses/pi/agent/settings.json` 也不再启用 `npm:@ogulcancelik/pi-codex-compaction`。这些内容属于历史或候选配置；若不再计划恢复，可后续删除，而不是把它们视为当前安装的一部分。
 
 仓库不收录 API Key、Token、私钥、登录态、sessions、cache、运行时包目录或项目级规则。
+
+## 4. 安装器验证
+
+```bash
+node --test tests/install-harness.test.mjs
+```
+
+测试使用临时安装目录和模拟 `pi` 命令，覆盖旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。

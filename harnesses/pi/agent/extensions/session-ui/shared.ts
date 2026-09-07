@@ -66,6 +66,21 @@ export function thinkingColor(level: string): ThemeColor {
 	}
 }
 
+/** Keep the Fast switch badge after effort, with its existing success/bold style. */
+export function formatEffortWithFast(
+	theme: Theme,
+	level: string | undefined,
+	fastStatus: string | undefined,
+): string | undefined {
+	const effort =
+		level && level !== "off"
+			? segment(theme, thinkingColor(level), "\uF0E7", level)
+			: "";
+	const fast =
+		fastStatus === "fast" ? theme.fg("success", theme.bold("fast")) : "";
+	return [effort, fast].filter(Boolean).join(" ") || undefined;
+}
+
 export function segment(
 	theme: Theme,
 	color: ThemeColor,

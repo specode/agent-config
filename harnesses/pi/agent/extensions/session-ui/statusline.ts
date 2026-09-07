@@ -24,15 +24,14 @@ import {
 } from "./statusline-core.ts";
 import {
 	ellipsize,
+	formatEffortWithFast,
 	formatTokens,
 	sanitizeTerminalText,
 	segment,
 	statusColor,
-	thinkingColor,
 } from "./shared.ts";
 
 const I_MODEL = "\uF2DB";
-const I_EFFORT = "\uF0E7";
 const I_DIR = "\uF07B";
 const I_BRANCH = "\uE0A0";
 const I_CTX = "\uF1C0";
@@ -269,24 +268,16 @@ function registerBuiltInSegments(
 		id: "model",
 		priority: 100,
 		required: true,
-		render: ({ ctx, theme, footerData }) => {
+		render: ({ ctx, theme }) => {
 			const fullName = ctx.model?.name || ctx.model?.id || "no-model";
 			const compactName = ctx.model?.id || fullName;
-			const fastStatus = footerData.getExtensionStatuses().get("openai-fast");
-			const fastLabel =
-				fastStatus === "fast" ? ` ${theme.fg("success", theme.bold("fast"))}` : "";
 			return {
-				full: segment(
-					theme,
-					"accent",
-					I_MODEL,
-					`${theme.bold(fullName)}${fastLabel}`,
-				),
+				full: segment(theme, "accent", I_MODEL, theme.bold(fullName)),
 				compact: segment(
 					theme,
 					"accent",
 					I_MODEL,
-					`${theme.bold(ellipsize(compactName, 20))}${fastLabel}`,
+					theme.bold(ellipsize(compactName, 20)),
 				),
 			};
 		},
@@ -295,10 +286,13 @@ function registerBuiltInSegments(
 	registry.register({
 		id: "effort",
 		priority: 80,
-		render: ({ pi, theme }) => {
-			const level = pi.getThinkingLevel();
-			if (!level || level === "off") return undefined;
-			return { full: segment(theme, thinkingColor(level), I_EFFORT, level) };
+		render: ({ pi, theme, footerData }) => {
+			const full = formatEffortWithFast(
+				theme,
+				pi.getThinkingLevel(),
+				footerData.getExtensionStatuses().get("openai-fast"),
+			);
+			return full ? { full } : undefined;
 		},
 	});
 

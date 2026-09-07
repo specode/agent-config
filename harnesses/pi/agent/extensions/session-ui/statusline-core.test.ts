@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { formatEffortWithFast } from "./shared.ts";
 import {
 	findUnknownStatusSegments,
 	fitStatuslineItems,
@@ -89,6 +91,33 @@ test("extension status filters support exact ids and star wildcards", () => {
 		isExtensionStatusExcluded("mcp-kimi-cu", ["openai-fast", "mcp-*"]),
 		true,
 	);
+});
+
+test("Fast follows effort with the original success color, bold text, and single space", () => {
+	const theme = {
+		fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+		bold: (text: string) => `<bold>${text}</bold>`,
+	} as unknown as Theme;
+	for (const level of ["minimal", "low", "medium", "high", "xhigh", "max"]) {
+		const color = `thinking${level[0]!.toUpperCase()}${level.slice(1)}`;
+		assert.equal(
+			formatEffortWithFast(theme, level, "fast"),
+			`<${color}>\uF0E7</${color}> ${level} <success><bold>fast</bold></success>`,
+		);
+	}
+	assert.equal(
+		formatEffortWithFast(theme, "off", "fast"),
+		"<success><bold>fast</bold></success>",
+	);
+	assert.equal(
+		formatEffortWithFast(theme, undefined, "fast"),
+		"<success><bold>fast</bold></success>",
+	);
+	assert.equal(
+		formatEffortWithFast(theme, "xhigh", undefined),
+		"<thinkingXhigh>\uF0E7</thinkingXhigh> xhigh",
+	);
+	assert.equal(formatEffortWithFast(theme, "off", undefined), undefined);
 });
 
 test("unknown configured segments are reported", () => {
