@@ -177,6 +177,7 @@ pi)
 			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
+			'harnesses/pi/agent/extensions/openai-fast|.pi/agent/extensions/openai-fast|directory|-|插件|OpenAI Fast' \
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
 			'harnesses/pi/agent/extensions/subagent/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
 			'harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \

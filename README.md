@@ -82,6 +82,10 @@
 
 UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名称但不锁定每轮终端标题；当前仍不提供 `/unname`。工具活动会在 `turn_end` 后清空，持久结果以 Pi 原生 transcript 为准。
 
+### Pi OpenAI Fast
+
+`harnesses/pi/agent/extensions/openai-fast/index.ts` 是自维护的本地扩展，由安装器复制整个目录；不再依赖 `npm:@diegopetrucci/pi-openai-fast`。它为 Codex OAuth 请求提供 `/fast [on|off|status]`，开启时按需添加 `service_tier: "priority"`，不限制 GPT 模型版本、不覆盖已有 tier，也不自动重试或修改费用。沿用 `extensions/openai-fast.json`，仓库保留默认开启；会话命令覆盖不持久化，reload、新建或恢复会话时回到配置默认值。状态栏仅在开启且当前通道适配时显示 `fast`，关闭或不适配时隐藏；请求处理细节通过 `/fast status` 查询，开关标记不代表后端确认加速。独立安装、配置与测试见 [OpenAI Fast 文档](harnesses/pi/agent/extensions/openai-fast/README.md)。本扩展按可公开使用的独立插件维护，个人状态栏的定制归 session-ui；首次替换第三方包时，另运行 `pi remove npm:@diegopetrucci/pi-openai-fast` 清理旧安装。
+
 ### Pi subscription-usage
 
 `harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-subscription-usage` 启用独立 Pi package。它通过 `/usage` 以统一的 5H/一周/月窗口样式查看当前 Codex、OpenCode Go、Grok 或 Kimi Coding 订阅额度；重新输入命令即强制刷新。只有 Codex 查询到可用重置次数时才展示重置菜单并要求二次确认；插件不实现 Fast 模式，也不读取 Grok CLI 本地凭据。详细行为和安全边界见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-subscription-usage)。
