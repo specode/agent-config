@@ -4,9 +4,7 @@
 		"openai-codex/gpt-6-astra",
 		"kimi-coding/k3",
 		"xai/grok-4.6",
-		"antigravity/gemini-3.8-flash",
-		"deepseek/deepseek-v4-flash",
-		"deepseek/deepseek-v4-pro"
+		"antigravity/gemini-3.8-flash"
 	],
 	"externalEditor": "nvim",
 	"collapseChangelog": true,
