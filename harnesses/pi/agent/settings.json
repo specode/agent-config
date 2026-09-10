@@ -4,7 +4,8 @@
 		"openai-codex/gpt-6-astra",
 		"kimi-coding/k3",
 		"xai/grok-4.6",
-		"antigravity/gemini-3.8-flash"
+		"antigravity/gemini-3.8-flash",
+		"antigravity/claude-opus-4-6"
 	],
 	"externalEditor": "nvim",
 	"collapseChangelog": true,
