@@ -23,7 +23,7 @@
 ./install-harness.sh --list
 ```
 
-每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，托管文件部署失败会自动回滚。安装 Pi 配置时还会清理旧的本地 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`，改由 `npm:@specode/pi-subscription-image` 提供生图能力。`install-rules.sh` 仍会在规则冲突时显示具体差异。
+每次只处理选中的一组配置。`install-harness.sh` 只汇总需要新增或更新的插件与配置，不输出逐文件 diff；有本机内容冲突时再询问是否覆盖。确认覆盖后会先把整组原配置备份到 `~/.agent-config-backups/<时间>/<组名>/`，托管文件部署失败会自动回滚。安装 Pi 配置时还会清理旧的本地 `~/.pi/agent/extensions/image-gen.ts`，原文件移入同一备份根目录下的 `pi-retired/`，改由 `npm:@specode/pi-subscription-image` 提供生图能力。同时会把旧的 `~/.pi/web-search.json` 迁到备份，Web Search 改装到 `~/.pi/agent/web-search.json`，以匹配 pi-web-access 0.29 的默认配置路径。`install-rules.sh` 仍会在规则冲突时显示具体差异。
 
 ## 2. 前置依赖
 
@@ -49,7 +49,7 @@
 
 - `rules/`：唯一的全局规则源。安装到 `~/.agents/AGENTS.md`、Claude Code、Codex、Pi 和 Grok 的全局规则路径；五个目标始终整组处理。
 - `harnesses/claude-code/`：Claude Code 的 settings、快捷键和状态栏脚本。
-- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、web search 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。
+- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
 - `install-rules.sh`：只安装 rules。
 - `install-harness.sh`：只安装指定 harness 的配置。
 

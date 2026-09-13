@@ -264,6 +264,64 @@ test("does not trust a zero exit status if the old package remains", (t) => {
 	assert.ok(existsSync(f.packageDir));
 });
 
+test("installs web-search.json into the Pi agent directory", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	assert.ok(existsSync(join(f.agentDir, "web-search.json")));
+	assert.equal(existsSync(join(f.home, ".pi/web-search.json")), false);
+	assert.match(
+		readFileSync(join(f.agentDir, "web-search.json"), "utf8"),
+		/auto-summary/,
+	);
+});
+
+test("retires the legacy ~/.pi/web-search.json after installing the agent-dir copy", (t) => {
+	const f = fixture(t);
+	mkdirSync(join(f.home, ".pi"), { recursive: true });
+	writeFileSync(
+		join(f.home, ".pi/web-search.json"),
+		'{"workflow":"summary-review"}\n',
+	);
+	assertSuccess(install(f));
+	assert.equal(existsSync(join(f.home, ".pi/web-search.json")), false);
+	assert.ok(existsSync(join(f.agentDir, "web-search.json")));
+	assert.match(
+		readFileSync(join(f.agentDir, "web-search.json"), "utf8"),
+		/auto-summary/,
+	);
+	const retired = readdirSync(join(f.home, ".agent-config-backups"))
+		.map((name) =>
+			join(
+				f.home,
+				".agent-config-backups",
+				name,
+				"pi-retired/.pi/web-search.json",
+			),
+		)
+		.find((path) => existsSync(path));
+	assert.ok(retired);
+	assert.equal(
+		readFileSync(retired, "utf8"),
+		'{"workflow":"summary-review"}\n',
+	);
+});
+
+test("declining installation leaves the legacy web-search.json untouched", (t) => {
+	const f = fixture(t);
+	seedOld(f);
+	mkdirSync(join(f.home, ".pi"), { recursive: true });
+	writeFileSync(
+		join(f.home, ".pi/web-search.json"),
+		'{"workflow":"summary-review"}\n',
+	);
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(
+		readFileSync(join(f.home, ".pi/web-search.json"), "utf8"),
+		'{"workflow":"summary-review"}\n',
+	);
+	assert.equal(existsSync(join(f.agentDir, "web-search.json")), false);
+});
+
 test("an unrelated dependency does not trigger removal", (t) => {
 	const f = fixture(t);
 	mkdirSync(join(f.agentDir, "npm"));

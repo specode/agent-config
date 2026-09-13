@@ -143,6 +143,25 @@ retire_removed_pi_image_gen() {
 	info "旧的本地 image-gen 扩展已迁移到备份，功能改由 npm:@specode/pi-subscription-image 提供"
 }
 
+retire_legacy_pi_web_search() {
+	[ "${INSTALL_MANAGED_DECLINED:-0}" -eq 0 ] || return 0
+
+	local relative_path='.pi/web-search.json'
+	local target_path="$AGENT_CONFIG_INSTALL_HOME/$relative_path"
+	local backup_path="$BACKUP_ROOT/pi-retired/$relative_path"
+
+	if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
+		return 0
+	fi
+
+	mkdir -p "$(dirname "$backup_path")"
+	mv "$target_path" "$backup_path"
+	INSTALL_MANAGED_CHANGED=1
+	# shellcheck disable=SC2034 # Shared installer state used for backup reporting.
+	BACKUP_CREATED=1
+	info "旧的 ~/.pi/web-search.json 已迁移到备份，配置改由 ~/.pi/agent/web-search.json 提供"
+}
+
 legacy_pi_openai_fast_present() {
 	local agent_dir="$1"
 	local package_name='@diegopetrucci/pi-openai-fast'
@@ -260,7 +279,7 @@ pi)
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
 			'harnesses/pi/agent/extensions/subagent/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
 			'harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
-			'harnesses/pi/web-search.json|.pi/web-search.json|file|-|配置|Web Search' \
+			'harnesses/pi/agent/web-search.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
 	}
 	;;
@@ -280,6 +299,7 @@ if [ "$HARNESS_ID" = 'pi' ]; then
 	retire_legacy_pi_work_animation
 	retire_removed_pi_image_gen
 	retire_removed_pi_openai_fast
+	retire_legacy_pi_web_search
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
 	success "$HARNESS_LABEL 配置安装完成"
