@@ -29,7 +29,8 @@
 		"npm:@specode/pi-subscription-usage",
 		"npm:@specode/pi-subscription-image",
 		"npm:pi-antigravity",
-		"npm:@ff-labs/pi-fff"
+		"npm:@ff-labs/pi-fff",
+		"git:github.com/NVlabs/SoL-Pi"
 	],
 	"hideThinkingBlock": true,
 	"fullscreenScrollbar": "auto",

@@ -49,9 +49,17 @@
 
 - `rules/`：唯一的全局规则源。安装到 `~/.agents/AGENTS.md`、Claude Code、Codex、Pi 和 Grok 的全局规则路径；五个目标始终整组处理。
 - `harnesses/claude-code/`：Claude Code 的 settings、快捷键和状态栏脚本。
-- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
+- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/sol-pi.json`、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
 - `install-rules.sh`：只安装 rules。
 - `install-harness.sh`：只安装指定 harness 的配置。
+
+### Pi SoL-Pi
+
+`harnesses/pi/agent/settings.json` 通过 `git:github.com/NVlabs/SoL-Pi` 启用独立 Pi package，`./install-harness.sh pi` 将 `harnesses/pi/agent/sol-pi.json` 安装到 `~/.pi/agent/sol-pi.json`，与其他 Pi 配置一起参与冲突确认、备份和回滚。
+
+当前配置同步自本机，仅开启 Action Fusion（`edit` / `write` 可附带后续验证命令）和 ObservationPack（大型工具结果归档，并通过 `obs_recall` 分页取回）；Evidence-Preserving Reducer 与 Online Context Compact 保持关闭，`cacheWriteReadRatio` 保留 `12.5`。不会启用额外的日志归约模型调用或 SoL-Pi 自动上下文压缩。
+
+受信任项目的 `.pi/sol-pi.json` 会整体覆盖用户级配置，两者不合并。ObservationPack 的归档位于 Pi 会话目录，不进入本仓库；以后若启用 Evidence-Preserving Reducer，应先确认允许将诊断日志发送给所选模型，凭据仍由 Pi 管理。详细说明见 [SoL-Pi 配置文档](https://github.com/NVlabs/SoL-Pi/blob/main/docs/configuration.md)。
 
 ### Pi last-model-effort
 
@@ -114,4 +122,4 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 node --test tests/install-harness.test.mjs
 ```
 
-测试使用临时安装目录和模拟 `pi` 命令，覆盖旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。
+测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 配置部署与冲突备份、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。

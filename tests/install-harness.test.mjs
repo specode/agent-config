@@ -132,11 +132,55 @@ function cleanupBackup(f) {
 		.find((path) => existsSync(path));
 }
 
-test("fresh install does not invoke package removal", (t) => {
+test("fresh and repeat installs deploy SoL-Pi without invoking package removal", (t) => {
+	const f = fixture(t);
+	const source = readFileSync(
+		join(ROOT, "harnesses/pi/agent/sol-pi.json"),
+		"utf8",
+	);
+	assert.deepEqual(JSON.parse(source), {
+		version: 1,
+		actionFusion: true,
+		observationPack: true,
+		evidencePreservingReducer: false,
+		onlineContextCompact: false,
+		cacheWriteReadRatio: 12.5,
+	});
+	assertSuccess(install(f));
+	assert.ok(existsSync(join(f.agentDir, "extensions/openai-fast/index.ts")));
+	assert.equal(readFileSync(join(f.agentDir, "sol-pi.json"), "utf8"), source);
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
+	assert.ok(settings.packages.includes("git:github.com/NVlabs/SoL-Pi"));
+	assertSuccess(install(f));
+	assert.equal(readFileSync(join(f.agentDir, "sol-pi.json"), "utf8"), source);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assert.deepEqual(calls(f), []);
+});
+
+test("SoL-Pi conflicts require consent and preserve the previous config in backup", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
+	const configPath = join(f.agentDir, "sol-pi.json");
+	const source = readFileSync(configPath, "utf8");
+	const previous = JSON.stringify({
+		...JSON.parse(source),
+		actionFusion: false,
+	});
+	writeFileSync(configPath, previous);
+
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(configPath, "utf8"), previous);
+	const backupRoot = join(f.home, ".agent-config-backups");
+	assert.equal(existsSync(backupRoot), false);
+
+	assertSuccess(install(f));
+	assert.equal(readFileSync(configPath, "utf8"), source);
+	const backup = readdirSync(backupRoot)
+		.map((name) => join(backupRoot, name, "pi/.pi/agent/sol-pi.json"))
+		.find((path) => existsSync(path));
+	assert.ok(backup);
+	assert.equal(readFileSync(backup, "utf8"), previous);
 	assert.deepEqual(calls(f), []);
-	assert.ok(existsSync(join(f.agentDir, "extensions/openai-fast/index.ts")));
 });
 
 test("installs replacement before uninstalling the exact old package and preserves backups", (t) => {
@@ -300,10 +344,7 @@ test("retires the legacy ~/.pi/web-search.json after installing the agent-dir co
 		)
 		.find((path) => existsSync(path));
 	assert.ok(retired);
-	assert.equal(
-		readFileSync(retired, "utf8"),
-		'{"workflow":"summary-review"}\n',
-	);
+	assert.equal(readFileSync(retired, "utf8"), '{"workflow":"summary-review"}\n');
 });
 
 test("declining installation leaves the legacy web-search.json untouched", (t) => {
