@@ -157,35 +157,6 @@ test("fresh and repeat installs deploy SoL-Pi without invoking package removal",
 	assert.deepEqual(calls(f), []);
 });
 
-test("pi-lens config stays archived but fresh and repeat installs do not enable or deploy it", (t) => {
-	const f = fixture(t);
-	const archivedPath = join(ROOT, "harnesses/pi/pi-lens/config.json");
-	const archivedConfig = readFileSync(archivedPath, "utf8");
-	assert.doesNotThrow(() => JSON.parse(archivedConfig));
-
-	for (let attempt = 0; attempt < 2; attempt += 1) {
-		assertSuccess(install(f));
-		const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
-		assert.equal(
-			settings.packages.some((entry) => {
-				const source = typeof entry === "string" ? entry : entry.source;
-				return source === "npm:pi-lens" || source.startsWith("npm:pi-lens@");
-			}),
-			false,
-		);
-		assert.equal(existsSync(join(f.home, ".pi-lens/config.json")), false);
-		const sessionUi = JSON.parse(
-			readFileSync(join(f.agentDir, "extensions/session-ui/config.json")),
-		);
-		assert.equal(
-			sessionUi.statusline.extensionStatuses.exclude.includes("pi-lens-lsp"),
-			false,
-		);
-	}
-	assert.equal(readFileSync(archivedPath, "utf8"), archivedConfig);
-	assert.deepEqual(calls(f), []);
-});
-
 test("fresh and repeat installs copy the multimodel profile without activating it", (t) => {
 	const f = fixture(t);
 	const relativePath = "profiles/pi-subagents/multimodel-ggk.json";

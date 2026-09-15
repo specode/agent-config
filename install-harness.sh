@@ -281,7 +281,8 @@ pi)
 			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
 			'harnesses/pi/agent/extensions/subagent/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
 			'harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
-			'harnesses/pi/agent/web-search.json|.pi/agent/web-search.json|file|-|配置|Web Search'
+			'harnesses/pi/agent/web-search.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
+			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
 	}
 	;;
 -h | --help)

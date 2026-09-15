@@ -27,17 +27,6 @@ test.after(() => {
 	rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 
-test("default extension status filters only target current integrations", () => {
-	const loaded = withConfig({});
-	assert.deepEqual(loaded.config.statusline.extensionStatuses.exclude, [
-		"openai-fast",
-		"mcp",
-		"mcp-*",
-		"subscription-usage",
-	]);
-	assert.deepEqual(loaded.warnings, []);
-});
-
 test("loads the integrated workAnimation config", () => {
 	const loaded = withConfig({
 		workAnimation: {

@@ -49,7 +49,7 @@
 
 - `rules/`：唯一的全局规则源。安装到 `~/.agents/AGENTS.md`、Claude Code、Codex、Pi 和 Grok 的全局规则路径；五个目标始终整组处理。
 - `harnesses/claude-code/`：Claude Code 的 settings、快捷键和状态栏脚本。
-- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/sol-pi.json`、`agent/pi-fff.json` 与 `agent/web-search.json`；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
+- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/sol-pi.json`、`agent/pi-fff.json`、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
 - `install-rules.sh`：只安装 rules。
 - `install-harness.sh`：只安装指定 harness 的配置。
 
@@ -130,9 +130,8 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 - `harnesses/pi/agent/automode.json`
 - `harnesses/pi/agent/extensions/pi-permission-system/config.json`
 - `harnesses/pi/agent/extensions/pi-auto-review/config.json`
-- `harnesses/pi/pi-lens/config.json`（仅归档保留，不再部署到 `~/.pi-lens/config.json`）
 
-`npm:pi-lens` 已从 packages 清单移除；后续安装不会重新启用该插件或恢复其本地配置。`harnesses/pi/agent/settings.json` 也不再启用 `npm:@ogulcancelik/pi-codex-compaction`。这些内容属于历史或候选配置；若不再计划恢复，可后续删除，而不是把它们视为当前安装的一部分。
+`harnesses/pi/agent/settings.json` 也不再启用 `npm:@ogulcancelik/pi-codex-compaction`。这些内容属于历史或候选配置；若不再计划恢复，可后续删除，而不是把它们视为当前安装的一部分。
 
 仓库不收录 API Key、Token、私钥、登录态、sessions、cache、运行时包目录或项目级规则。
 
@@ -142,4 +141,4 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 node --test tests/*.test.mjs
 ```
 
-测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 与 FFF 配置部署与冲突备份、pi-lens 配置仅归档不部署、多模型 Profile 约束及仅复制不激活、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。
+测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 与 FFF 配置部署与冲突备份、多模型 Profile 约束及仅复制不激活、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。

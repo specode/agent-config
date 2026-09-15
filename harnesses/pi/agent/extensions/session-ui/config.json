@@ -30,6 +30,7 @@
 		],
 		"extensionStatuses": {
 			"exclude": [
+				"pi-lens-lsp",
 				"openai-fast",
 				"mcp",
 				"mcp-*",
