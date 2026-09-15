@@ -49,7 +49,7 @@
 
 - `rules/`：唯一的全局规则源。安装到 `~/.agents/AGENTS.md`、Claude Code、Codex、Pi 和 Grok 的全局规则路径；五个目标始终整组处理。
 - `harnesses/claude-code/`：Claude Code 的 settings、快捷键和状态栏脚本。
-- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/sol-pi.json`、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
+- `harnesses/pi/`：Pi 的 settings、快捷键、extensions、`agent/sol-pi.json`、`agent/pi-fff.json`、`agent/web-search.json` 与 pi-lens 配置；这些路径作为同一个 Pi 配置组处理。Web Search 安装到 `~/.pi/agent/web-search.json`。
 - `install-rules.sh`：只安装 rules。
 - `install-harness.sh`：只安装指定 harness 的配置。
 
@@ -61,6 +61,10 @@
 
 受信任项目的 `.pi/sol-pi.json` 会整体覆盖用户级配置，两者不合并。ObservationPack 的归档位于 Pi 会话目录，不进入本仓库；以后若启用 Evidence-Preserving Reducer，应先确认允许将诊断日志发送给所选模型，凭据仍由 Pi 管理。详细说明见 [SoL-Pi 配置文档](https://github.com/NVlabs/SoL-Pi/blob/main/docs/configuration.md)。
 
+### Pi FFF 搜索配置
+
+仓库通过 `npm:@ff-labs/pi-fff` 启用 FFF 扩展，并将 `harnesses/pi/agent/pi-fff.json` 部署到 `~/.pi/agent/pi-fff.json`，与其他 Pi 配置一起参与冲突确认、备份和回滚。配置使用 `mode: "override"`，以 FFF 替换内置 `find`、`grep` 并接管 `@` 文件补全；设置 `enableHomeDirScanning: false`，避免从主目录启动时自动索引整个主目录。该文件仅包含可复用的用户偏好，不收录 FFF 的索引、访问频率或查询历史数据库。
+
 ### Pi last-model-effort
 
 `harnesses/pi/agent/settings.json` 通过 `npm:@specode/pi-last-model-effort` 启用独立 Pi package。它会按模型记住最近实际使用的 thinking / reasoning effort，切换回来时自动恢复，并在新建会话时恢复最近模型；`pi -c`、`/resume`、fork 和显式 CLI 参数仍保留原有优先级。运行状态写入 `~/.pi/agent/state/last-model-effort.json`，不进入配置仓库，也不改写 Pi 的 `modelThinkingLevels`。详细行为见 [npm 包说明](https://www.npmjs.com/package/@specode/pi-last-model-effort)。
@@ -71,7 +75,7 @@
 
 ### Pi 子代理策略
 
-多模型 Profile 禁用 `claude-code`、`codex-exec`、`cursor-agent` 及其 writer 变体，避免只使用 Pi 模型时误调本机外部 CLI；禁用项会在手动执行 `/subagents-load-profile multimodel-ggk` 时与模型角色映射一起写入用户 settings。`harnesses/pi/agent/extensions/subagent/config.json` 将模型失败排除时间设为 10 秒，既避免同一轮并发任务反复撞击暂时故障的模型，又不会因一次连接错误长时间跳过模型。
+多模型 Profile 禁用 `claude-code`、`codex-exec`、`cursor-agent` 及其 writer 变体，避免只使用 Pi 模型时误调本机外部 CLI；禁用项会在手动执行 `/subagents-load-profile multimodel-ggk` 时与模型角色映射一起写入用户 settings。`harnesses/pi/agent/extensions/subagent/config.json` 仅统一任务超时为两小时。
 
 ### Pi session-ui
 
@@ -122,4 +126,4 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 node --test tests/install-harness.test.mjs
 ```
 
-测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 配置部署与冲突备份、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。
+测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 与 FFF 配置部署与冲突备份、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。

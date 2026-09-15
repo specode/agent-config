@@ -183,6 +183,60 @@ test("SoL-Pi conflicts require consent and preserve the previous config in backu
 	assert.deepEqual(calls(f), []);
 });
 
+test("fresh and repeat installs deploy FFF config into the target agent directory", (t) => {
+	const f = fixture(t);
+	const source = readFileSync(
+		join(ROOT, "harnesses/pi/agent/pi-fff.json"),
+		"utf8",
+	);
+	assert.deepEqual(JSON.parse(source), {
+		mode: "override",
+		enableHomeDirScanning: false,
+	});
+	const target = join(f.agentDir, "pi-fff.json");
+	assertSuccess(install(f));
+	assert.equal(readFileSync(target, "utf8"), source);
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
+	assert.ok(settings.packages.includes("npm:@ff-labs/pi-fff"));
+	assert.equal(existsSync(join(f.home, ".pi/pi-fff.json")), false);
+	assert.equal(existsSync(join(f.root, "unrelated-agent")), false);
+	assertSuccess(install(f));
+	assert.equal(readFileSync(target, "utf8"), source);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assert.deepEqual(calls(f), []);
+});
+
+test("FFF config conflicts require consent and preserve the previous config in backup", (t) => {
+	const f = fixture(t);
+	const target = join(f.agentDir, "pi-fff.json");
+	const previous = JSON.stringify({
+		mode: "tools-only",
+		enableHomeDirScanning: true,
+	});
+	writeFileSync(target, previous);
+
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(target, "utf8"), previous);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+
+	assertSuccess(install(f));
+	assert.equal(
+		readFileSync(target, "utf8"),
+		readFileSync(join(ROOT, "harnesses/pi/agent/pi-fff.json"), "utf8"),
+	);
+	const backupRoot = join(f.home, ".agent-config-backups");
+	const backups = readdirSync(backupRoot);
+	assert.equal(backups.length, 1);
+	assert.equal(
+		readFileSync(
+			join(backupRoot, backups[0], "pi/.pi/agent/pi-fff.json"),
+			"utf8",
+		),
+		previous,
+	);
+	assert.deepEqual(calls(f), []);
+});
+
 test("installs replacement before uninstalling the exact old package and preserves backups", (t) => {
 	const f = fixture(t);
 	seedOld(f);

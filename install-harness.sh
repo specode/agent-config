@@ -273,6 +273,7 @@ pi)
 		printf '%s\n' \
 			'harnesses/pi/agent/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
 			'harnesses/pi/agent/sol-pi.json|.pi/agent/sol-pi.json|file|-|配置|SoL-Pi' \
+			'harnesses/pi/agent/pi-fff.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
 			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
 			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
 			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
