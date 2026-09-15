@@ -1,4 +1,7 @@
 {
+	"lens": {
+		"enabled": false
+	},
 	"widget": {
 		"visible": false
 	},
