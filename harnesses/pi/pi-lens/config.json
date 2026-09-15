@@ -1,20 +1,24 @@
 {
-	"widget": {
-		"visible": false
-	},
-	"format": {
-		"enabled": true,
-		"mode": "deferred"
-	},
+	"lens": { "enabled": false },
+	"startup": { "mode": "minimal", "scans": { "enabled": false } },
+	"widget": { "visible": false },
+	"lsp": { "enabled": false },
+	"tests": { "enabled": false },
+	"readGuard": { "enabled": false },
+	"format": { "enabled": false, "mode": "deferred" },
+	"autofix": { "enabled": false },
 	"actionableWarnings": {
-		"enabled": true,
-		"includeLspCodeActions": true,
+		"enabled": false,
+		"includeLspCodeActions": false,
 		"deltaOnly": true,
-		"autoFix": {
-			"enabled": false
-		}
+		"autoFix": { "enabled": false }
 	},
-	"contextInjection": {
-		"enabled": false
+	"contextInjection": { "enabled": false },
+	"tools": {
+		"lazy": false,
+		"ast_grep_replace": { "enabled": false },
+		"lsp_navigation": { "enabled": false },
+		"lens_diagnostics": { "enabled": false },
+		"lens_diagnostic_mark": { "enabled": false }
 	}
 }
