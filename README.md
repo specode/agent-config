@@ -71,7 +71,22 @@
 
 ### Pi 多模型 Profile
 
-`harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 为 `pi-subagents` 提供本地多模型角色映射：Kimi K3 `high` 负责侦察，GPT-6 Astra `xhigh`/`max` 负责实现与推理，Grok 4.6 `high` 负责研究和审核，GPT-5.6 Sol 与 K3 `max` 作为兑底。`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射；安装或更新后在 Pi 中运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。
+`harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json` 按 `pi-subagents` 当前支持的最小覆盖方式配置：每个角色只指定一个完整 `provider/id`，将 `thinking` 独立声明，保留内置角色的提示词、工具和上下文继承策略。具体模型与档位是本地选择，不是插件强制标准。
+
+| 角色 | 模型 | thinking |
+| --- | --- | --- |
+| scout（侦察） | Kimi K3 | high |
+| delegate（通用委派） | GPT-6 Astra | xhigh |
+| researcher（研究） | Grok 4.6 | high |
+| worker（实现） | GPT-6 Astra | medium |
+| reviewer（评审） | Grok 4.6 | high |
+| oracle（方案顾问） | GPT-6 Astra | max |
+
+reviewer 默认使用 `fresh` 上下文，reviewer 和 oracle 声明 `acceptanceRole: "read-only"`；不覆盖其内置工具和提示词。`defaultContext` 是默认偏好，不是不可覆盖的隔离策略，独立评审委派时仍应显式使用 `context: "fresh"`。保留 worker 和 oracle 的内置 `fork` 默认值，不为所有任务强制一种上下文模式。
+
+`pi-subagents` 0.68.0 已移除 `fallbackModels`，配置中不再声明自动备用模型；调用失败时应先排查原因，必要时再显式选择模型重试，不自动切换外部 CLI。
+
+`./install-harness.sh pi` 只把 Profile 复制到 `~/.pi/agent/profiles/pi-subagents/`，不会自动改写角色映射。安装或更新后运行 `/subagents-load-profile multimodel-ggk` 启用，再用 `/subagents-models` 核对实际路由。加载会替换整套 `agentOverrides`，但保留未被 Profile 覆盖的其他子代理设置及既有机器绑定；如提示是否切换当前会话模型，可选择不切换。需要验证提供商访问时，可手动运行 `/subagents-check-profile multimodel-ggk`（会发起真实模型探测）。
 
 ### Pi 子代理策略
 
@@ -123,7 +138,7 @@ UI Meta 仅在交互式 TUI 中启用，手工 `/name` 默认锁定 session 名�
 ## 4. 安装器验证
 
 ```bash
-node --test tests/install-harness.test.mjs
+node --test tests/*.test.mjs
 ```
 
-测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 与 FFF 配置部署与冲突备份、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。
+测试使用临时安装目录和模拟 `pi` 命令，覆盖 SoL-Pi 与 FFF 配置部署与冲突备份、多模型 Profile 约束及仅复制不激活、旧包清理、重复安装、取消安装、目标目录隔离及卸载失败重试，不卸载本机真实包。

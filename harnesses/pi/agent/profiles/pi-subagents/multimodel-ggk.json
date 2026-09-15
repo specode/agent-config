@@ -2,28 +2,31 @@
 	"subagents": {
 		"agentOverrides": {
 			"scout": {
-				"model": "kimi-coding/k3:high",
-				"fallbackModels": ["openai-codex/gpt-6-astra:medium"]
+				"model": "kimi-coding/k3",
+				"thinking": "high"
 			},
 			"delegate": {
-				"model": "openai-codex/gpt-6-astra:xhigh",
-				"fallbackModels": ["kimi-coding/k3:max"]
+				"model": "openai-codex/gpt-6-astra",
+				"thinking": "xhigh"
 			},
 			"researcher": {
-				"model": "xai/grok-4.6:high",
-				"fallbackModels": ["kimi-coding/k3:max"]
+				"model": "xai/grok-4.6",
+				"thinking": "high"
 			},
 			"worker": {
-				"model": "openai-codex/gpt-6-astra:medium",
-				"fallbackModels": ["openai-codex/gpt-5.6-sol:xhigh"]
+				"model": "openai-codex/gpt-6-astra",
+				"thinking": "medium"
 			},
 			"reviewer": {
-				"model": "xai/grok-4.6:high",
-				"fallbackModels": ["kimi-coding/k3:max"]
+				"model": "xai/grok-4.6",
+				"thinking": "high",
+				"defaultContext": "fresh",
+				"acceptanceRole": "read-only"
 			},
 			"oracle": {
-				"model": "openai-codex/gpt-6-astra:max",
-				"fallbackModels": ["openai-codex/gpt-5.6-sol:max"]
+				"model": "openai-codex/gpt-6-astra",
+				"thinking": "max",
+				"acceptanceRole": "read-only"
 			},
 			"claude-code": {
 				"disabled": true

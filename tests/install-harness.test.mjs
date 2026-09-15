@@ -157,6 +157,28 @@ test("fresh and repeat installs deploy SoL-Pi without invoking package removal",
 	assert.deepEqual(calls(f), []);
 });
 
+test("fresh and repeat installs copy the multimodel profile without activating it", (t) => {
+	const f = fixture(t);
+	const relativePath = "profiles/pi-subagents/multimodel-ggk.json";
+	const source = readFileSync(
+		join(ROOT, "harnesses/pi/agent", relativePath),
+		"utf8",
+	);
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		assertSuccess(install(f));
+		assert.equal(readFileSync(join(f.agentDir, relativePath), "utf8"), source);
+		const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
+		assert.equal(Object.hasOwn(settings, "subagents"), false);
+		assert.equal(
+			existsSync(
+				join(f.agentDir, "profiles/pi-subagents/three-model-context-first.json"),
+			),
+			false,
+		);
+	}
+	assert.deepEqual(calls(f), []);
+});
+
 test("SoL-Pi conflicts require consent and preserve the previous config in backup", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
