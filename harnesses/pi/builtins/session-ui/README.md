@@ -42,7 +42,7 @@
 
 ## 配置
 
-安装后的默认配置位于 `~/.pi/agent/extensions/session-ui/config.json`，仓库中的初始值见 [session-ui 配置](../../plugin-configs/session-ui/config.json)。也可在启动前指定绝对路径：
+安装后的配置位于 `~/.pi/agent/extensions/session-ui/config.json`。[仓库配置](../../plugin-configs/session-ui/config.json) 不覆盖任何字段，默认值以下表为准；需要个人偏好时在其中只写要改的项。也可在启动前指定绝对路径：
 
 ```bash
 PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
