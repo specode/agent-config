@@ -3,6 +3,13 @@
 	"$docs": "https://code.claude.com/docs/en/keybindings",
 	"bindings": [
 		{
+			"context": "Chat",
+			"bindings": {
+				"alt+p": null,
+				"ctrl+l": "chat:modelPicker"
+			}
+		},
+		{
 			"context": "Scroll",
 			"bindings": {
 				"alt+k": "scroll:lineUp",
