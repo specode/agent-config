@@ -73,7 +73,7 @@ show_managed_change_summary() {
 
 	printf '%s 检测到变更：\n' "$label"
 	for item_type in '插件' '配置'; do
-		for change_type in '新增' '更新'; do
+		for change_type in '新增' '更新' '移除'; do
 			names="$(LC_ALL=C awk -F '|' -v change_type="$change_type" -v item_type="$item_type" '
 				$1 == change_type && $2 == item_type {
 					if (names != "") names = names "、"
@@ -227,6 +227,14 @@ copy_managed_path() {
 	esac
 }
 
+# Entries may use repository-relative sources or installer-prepared absolute paths.
+managed_source_path() {
+	case "$1" in
+	/*) printf '%s\n' "$1" ;;
+	*) printf '%s/%s\n' "$AGENT_CONFIG_ROOT" "$1" ;;
+	esac
+}
+
 stage_group_paths() {
 	local manifest="$1"
 	local staging_root="$2"
@@ -234,8 +242,9 @@ stage_group_paths() {
 
 	mkdir -p "$staging_root" || return 1
 	while IFS='|' read -r repository_path local_path expected_type _expected_mode _item_type _item_name; do
+		[ "$expected_type" != 'absent' ] || continue
 		copy_managed_path \
-			"$AGENT_CONFIG_ROOT/$repository_path" \
+			"$(managed_source_path "$repository_path")" \
 			"$staging_root/$local_path" \
 			"$expected_type" || return 1
 	done <"$manifest"
@@ -281,6 +290,8 @@ install_staged_paths() {
 	local _repository_path local_path expected_type expected_mode _item_type _item_name
 
 	while IFS='|' read -r _repository_path local_path expected_type expected_mode _item_type _item_name; do
+		# Retired paths were moved to backup with the rest of the transaction.
+		[ "$expected_type" != 'absent' ] || continue
 		copy_managed_path \
 			"$staging_root/$local_path" \
 			"$AGENT_CONFIG_INSTALL_HOME/$local_path" \
@@ -380,7 +391,11 @@ deploy_group_transaction() {
 
 	if ! installer_uses_summary_output; then
 		while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
-			success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
+			if [ "$_expected_type" = 'absent' ]; then
+				success "已确保移除 $AGENT_CONFIG_INSTALL_HOME/$local_path"
+			else
+				success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
+			fi
 		done <"$manifest"
 	fi
 }
@@ -419,8 +434,19 @@ install_managed_group() {
 		printf '\n%s：\n' "$label"
 	fi
 	while IFS='|' read -r repository_path local_path expected_type expected_mode item_type item_name; do
-		source_path="$AGENT_CONFIG_ROOT/$repository_path"
+		source_path="$(managed_source_path "$repository_path")"
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
+		if [ "$expected_type" = 'absent' ]; then
+			if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+				if installer_uses_summary_output; then
+					record_managed_change "$changes_log" '移除' "$item_type" "$item_name" "$local_path"
+				else
+					printf '  [待移除] %s\n' "$target_path"
+				fi
+				group_conflict=1
+			fi
+			continue
+		fi
 		validate_repository_source "$source_path" "$expected_type"
 
 		if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then

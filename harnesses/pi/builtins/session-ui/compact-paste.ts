@@ -18,20 +18,16 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
-	addPasteMarkerSpacing,
+	imagePasteLabel,
 	imageMimeType,
 	isClipboardImagePath,
 	PASTE_MARKER_RE,
-	pasteSize,
 	supportsImagePreviewMime,
 } from "./compact-paste-core.ts";
 
 export {
-	addPasteMarkerSpacing,
-	compactPasteCount,
 	imageMimeType,
 	isClipboardImagePath,
-	pasteSize,
 	supportsImagePreviewMime,
 } from "./compact-paste-core.ts";
 
@@ -72,7 +68,6 @@ type PasteLabelIndex = {
 	text: string;
 	registry: Map<number, string>;
 	imageNumbers: Map<number, number>;
-	pasteNumbers: Map<number, number>;
 };
 
 type ImagePreviewCellSize = {
@@ -121,7 +116,7 @@ function imageLabelScreenPosition(
 		);
 	}
 	const viewportBottom = Math.min(lines.length, viewportTop + tui.terminal.rows);
-	const label = `[Image ${imageNumber}]`;
+	const label = `[image #${imageNumber}]`;
 
 	for (
 		let lineIndex = viewportBottom - 1;
@@ -163,7 +158,7 @@ async function loadImagePreviewSource(
 class ImagePreviewOverlay {
 	private source?: ImagePreviewSource;
 	private image?: Image;
-	private label = "Image";
+	private label = "image";
 	private maxWidthCells?: number;
 	private maxHeightCells?: number;
 
@@ -174,7 +169,7 @@ class ImagePreviewOverlay {
 	}
 
 	setLabel(imageNumber: number): void {
-		this.label = `Image ${imageNumber}`;
+		this.label = `image #${imageNumber}`;
 	}
 
 	setTarget(target: ImagePreviewTarget, source: ImagePreviewSource): void {
@@ -369,15 +364,9 @@ export class CompactPasteEditor extends CustomEditor {
 			const registry = pasteRegistry(this);
 			const pasteId = registry.pasteCounter + 1;
 			const marker = `[paste #${pasteId}]`;
-			const { line, col } = this.getCursor();
-			const currentLine = this.getLines()[line] ?? "";
-			const before = currentLine[col - 1] ?? "";
-			const after = currentLine[col] ?? "";
-			const leadingSpace = before && !/\s/.test(before) ? " " : "";
-			const trailingSpace = after && /\s/.test(after) ? "" : " ";
 
 			// Insert first so Editor's undo snapshot captures the registry before the image.
-			super.insertTextAtCursor(`${leadingSpace}${marker}${trailingSpace}`);
+			super.insertTextAtCursor(marker);
 			registry.pasteCounter = pasteId;
 			registry.pastes.set(pasteId, text);
 		} catch (error) {
@@ -399,32 +388,8 @@ export class CompactPasteEditor extends CustomEditor {
 
 	override handleInput(data: string): void {
 		const previousText = this.getText();
-		let previousPasteIds: Set<number> | undefined;
-		try {
-			previousPasteIds = new Set(pasteRegistry(this).pastes.keys());
-		} catch {
-			// Fall through to Pi's native editor behavior.
-		}
-
+		// Text paste content, spacing and markers belong to the native editor.
 		super.handleInput(data);
-
-		if (previousPasteIds) {
-			try {
-				const registry = pasteRegistry(this);
-				let changed = false;
-				for (const [pasteId, content] of registry.pastes) {
-					if (!previousPasteIds.has(pasteId) && !isClipboardImagePath(content)) {
-						changed = this.addMarkerSpacing(pasteId) || changed;
-					}
-				}
-				if (changed) this.onChange?.(this.getText());
-			} catch (error) {
-				this.reportCompatibilityFallback(
-					error instanceof Error ? error.message : "paste spacing unavailable",
-				);
-				// Keep the native marker untouched if Pi's editor internals change.
-			}
-		}
 
 		if (this.getText() !== previousText) this.pasteLabelIndex = undefined;
 		this.syncImagePreview();
@@ -438,17 +403,13 @@ export class CompactPasteEditor extends CustomEditor {
 		}
 
 		const imageNumbers = new Map<number, number>();
-		const pasteNumbers = new Map<number, number>();
 		let nextImageNumber = 1;
-		let nextPasteNumber = 1;
 		for (const match of text.matchAll(PASTE_MARKER_RE)) {
 			const pasteId = Number(match[1]);
 			const content = registry.pastes.get(pasteId);
 			if (!content) continue;
 			if (isClipboardImagePath(content)) {
 				imageNumbers.set(pasteId, nextImageNumber++);
-			} else {
-				pasteNumbers.set(pasteId, nextPasteNumber++);
 			}
 		}
 
@@ -456,7 +417,6 @@ export class CompactPasteEditor extends CustomEditor {
 			text,
 			registry: registry.pastes,
 			imageNumbers,
-			pasteNumbers,
 		};
 		this.pasteLabelIndex = index;
 		return index;
@@ -671,38 +631,6 @@ export class CompactPasteEditor extends CustomEditor {
 		return true;
 	}
 
-	private addMarkerSpacing(pasteId: number): boolean {
-		// SAFETY: checkCompatibility validates this inherited Editor state before
-		// the editor is installed; failures fall back to Pi's native behavior.
-		const internal = this as unknown as EditorStateAccess;
-		for (
-			let lineIndex = 0;
-			lineIndex < internal.state.lines.length;
-			lineIndex++
-		) {
-			const edit = addPasteMarkerSpacing(
-				internal.state.lines[lineIndex] ?? "",
-				pasteId,
-			);
-			if (!edit) continue;
-			internal.state.lines[lineIndex] = edit.line;
-
-			if (internal.state.cursorLine === lineIndex) {
-				if (
-					edit.leadingLength > 0 &&
-					internal.state.cursorCol >= edit.markerStart
-				) {
-					internal.state.cursorCol += edit.leadingLength;
-				}
-				if (edit.trailingLength > 0 && internal.state.cursorCol >= edit.markerEnd) {
-					internal.state.cursorCol += edit.trailingLength;
-				}
-			}
-			return true;
-		}
-		return false;
-	}
-
 	override render(width: number): string[] {
 		let registry: EditorPasteRegistry;
 		try {
@@ -714,19 +642,13 @@ export class CompactPasteEditor extends CustomEditor {
 			return super.render(width);
 		}
 
-		const { imageNumbers, pasteNumbers } = this.getPasteLabelIndex(registry);
+		const { imageNumbers } = this.getPasteLabelIndex(registry);
 
 		return super.render(width).map((line) =>
 			line.replace(PASTE_MARKER_RE, (marker, rawId: string) => {
 				const pasteId = Number(rawId);
 				const imageNumber = imageNumbers.get(pasteId);
-				if (imageNumber) return `[Image ${imageNumber}]`;
-
-				const pasteNumber = pasteNumbers.get(pasteId);
-				const content = registry.pastes.get(pasteId);
-				return pasteNumber && content
-					? `[Paste ${pasteNumber} · ${pasteSize(content)}]`
-					: marker;
+				return imageNumber ? imagePasteLabel(marker, imageNumber) : marker;
 			}),
 		);
 	}

@@ -5,7 +5,7 @@ import test from "node:test";
 const profile = JSON.parse(
 	readFileSync(
 		new URL(
-			"../harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json",
+			"../harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json",
 			import.meta.url,
 		),
 		"utf8",

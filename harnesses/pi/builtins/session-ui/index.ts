@@ -7,7 +7,7 @@
  * - Footer modules are registered segments whose order is controlled by config.
  * - UI metadata, work state, and animation frames share one terminal-title owner.
  *
- * Configuration: ./session-ui/config.json
+ * Installed configuration: ./config.json
  * Override path: PI_SESSION_UI_CONFIG=/absolute/path/to/config.json
  *
  * Commands:
@@ -17,15 +17,15 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerCompactPasteEditor } from "./session-ui/compact-paste.ts";
-import { loadSessionUiConfig } from "./session-ui/config.ts";
-import { registerEffort } from "./session-ui/effort.ts";
-import { registerStatusline } from "./session-ui/statusline.ts";
-import { registerSessionTitleController } from "./session-ui/title-controller.ts";
-import { registerToolActivity } from "./session-ui/tool-activity.ts";
-import { registerTurnDuration } from "./session-ui/turn-duration.ts";
-import { registerUiMeta } from "./session-ui/ui-meta.ts";
-import { registerWorkAnimation } from "./session-ui/work-animation.ts";
+import { registerCompactPasteEditor } from "./compact-paste.ts";
+import { loadSessionUiConfig } from "./config.ts";
+import { registerEffort } from "./effort.ts";
+import { registerStatusline } from "./statusline.ts";
+import { registerSessionTitleController } from "./title-controller.ts";
+import { registerToolActivity } from "./tool-activity.ts";
+import { registerTurnDuration } from "./turn-duration.ts";
+import { registerUiMeta } from "./ui-meta.ts";
+import { registerWorkAnimation } from "./work-animation.ts";
 
 export default function sessionUi(pi: ExtensionAPI): void {
 	const loaded = loadSessionUiConfig();

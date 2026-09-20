@@ -19,6 +19,22 @@ usage() {
 EOF
 }
 
+prepare_pi_session_ui() {
+	local source="$AGENT_CONFIG_ROOT/harnesses/pi/builtins/session-ui"
+	local config="$AGENT_CONFIG_ROOT/harnesses/pi/plugin-configs/session-ui/config.json"
+
+	if ! command -v rsync >/dev/null 2>&1; then
+		error '安装托管目录需要 rsync'
+		return 1
+	fi
+	validate_repository_source "$source" directory
+	validate_repository_source "$config" file
+	PI_SESSION_UI_SOURCE="$INSTALL_TEMP_ROOT/pi/session-ui"
+	# Compose code and config before comparison; deploy one non-overlapping directory.
+	copy_managed_path "$source" "$PI_SESSION_UI_SOURCE" directory
+	copy_managed_path "$config" "$PI_SESSION_UI_SOURCE/config.json" file
+}
+
 migrate_legacy_pi_work_animation_config() {
 	local legacy_config="$AGENT_CONFIG_INSTALL_HOME/.pi/agent/extensions/work-animation.json"
 	local session_ui_config="$AGENT_CONFIG_INSTALL_HOME/.pi/agent/extensions/session-ui/config.json"
@@ -269,20 +285,21 @@ claude-code)
 	;;
 pi)
 	HARNESS_LABEL='Pi'
+	prepare_pi_session_ui
 	managed_entries() {
 		printf '%s\n' \
-			'harnesses/pi/agent/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
-			'harnesses/pi/agent/sol-pi.json|.pi/agent/sol-pi.json|file|-|配置|SoL-Pi' \
-			'harnesses/pi/agent/pi-fff.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
-			'harnesses/pi/agent/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
-			'harnesses/pi/agent/extensions/session-ui.ts|.pi/agent/extensions/session-ui.ts|file|-|插件|session-ui' \
-			'harnesses/pi/agent/extensions/session-ui|.pi/agent/extensions/session-ui|directory|-|插件|session-ui' \
-			'harnesses/pi/agent/extensions/openai-fast|.pi/agent/extensions/openai-fast|directory|-|插件|OpenAI Fast' \
-			'harnesses/pi/agent/extensions/openai-fast.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
-			'harnesses/pi/agent/extensions/subagent/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
-			'harnesses/pi/agent/profiles/pi-subagents/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
-			'harnesses/pi/agent/web-search.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
-			'harnesses/pi/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
+			'harnesses/pi/config/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
+			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
+			'-|.pi/agent/extensions/session-ui.ts|absent|-|插件|session-ui 旧入口' \
+			"$PI_SESSION_UI_SOURCE|.pi/agent/extensions/session-ui|directory|-|插件|session-ui" \
+			'harnesses/pi/builtins/openai-fast|.pi/agent/extensions/openai-fast|directory|-|插件|OpenAI Fast' \
+			'harnesses/pi/plugin-configs/openai-fast/config.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
+			'harnesses/pi/plugin-configs/pi-subagents/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
+			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
+			'harnesses/pi/plugin-configs/sol-pi/config.json|.pi/agent/sol-pi.json|file|-|配置|SoL-Pi' \
+			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
+			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
+			'harnesses/pi/plugin-configs/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
 	}
 	;;
 -h | --help)

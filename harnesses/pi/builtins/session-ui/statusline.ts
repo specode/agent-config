@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai";
+import { collectStats, type CacheHitRates, type Stats } from "./statusline-usage.ts";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -53,25 +53,6 @@ interface FooterData {
 	getGitBranch(): string | null;
 	getExtensionStatuses(): ReadonlyMap<string, string>;
 	onBranchChange(callback: () => void): () => void;
-}
-
-interface CacheUsage {
-	input: number;
-	cacheRead: number;
-	cacheWrite: number;
-}
-
-interface CacheHitRates {
-	current?: number;
-	rolling5?: number;
-	session?: number;
-}
-
-interface Stats {
-	input: number;
-	output: number;
-	cost: number;
-	cacheHitRates: CacheHitRates;
 }
 
 function isUsingSubscription(ctx: ExtensionContext): boolean {
@@ -142,76 +123,12 @@ class StatusSegmentRegistry {
 	}
 }
 
-function tokenWeightedHitRate(
-	usages: readonly CacheUsage[],
-): number | undefined {
-	let cacheRead = 0;
-	let promptTokens = 0;
-	for (const usage of usages) {
-		cacheRead += usage.cacheRead;
-		promptTokens += usage.input + usage.cacheRead + usage.cacheWrite;
-	}
-	return promptTokens > 0 ? (cacheRead / promptTokens) * 100 : undefined;
-}
-
-function calculateCacheHitRates(usages: readonly CacheUsage[]): CacheHitRates {
-	const current = tokenWeightedHitRate(usages.slice(-1));
-	const rolling5 = tokenWeightedHitRate(usages.slice(-5));
-	const session = tokenWeightedHitRate(usages);
-	return {
-		...(current === undefined ? {} : { current }),
-		...(rolling5 === undefined ? {} : { rolling5 }),
-		...(session === undefined ? {} : { session }),
-	};
-}
-
 function formatCacheHitRates(rates: CacheHitRates): string | undefined {
 	const values = [rates.current, rates.rolling5, rates.session];
 	if (values.every((rate) => rate === undefined)) return undefined;
 	return values
 		.map((rate) => (rate === undefined ? "-" : `${Math.round(rate)}%`))
 		.join("/");
-}
-
-export function collectStats(entries: readonly unknown[]): Stats {
-	const stats: Stats = {
-		input: 0,
-		output: 0,
-		cost: 0,
-		cacheHitRates: {},
-	};
-	const assistantUsages: CacheUsage[] = [];
-
-	for (const entry of entries as Array<{
-		type?: string;
-		message?: { role?: string; usage?: Usage };
-		usage?: Usage;
-	}>) {
-		let usage: Usage | undefined;
-		if (entry.type === "message" && entry.message?.role === "assistant") {
-			usage = entry.message.usage;
-			if (usage) {
-				assistantUsages.push({
-					input: usage.input,
-					cacheRead: usage.cacheRead,
-					cacheWrite: usage.cacheWrite,
-				});
-			}
-		} else if (entry.type === "message" && entry.message?.role === "toolResult") {
-			usage = entry.message.usage;
-		} else if (
-			(entry.type === "branch_summary" || entry.type === "compaction") &&
-			entry.usage
-		) {
-			usage = entry.usage;
-		}
-		if (!usage) continue;
-		stats.input += usage.input;
-		stats.output += usage.output;
-		stats.cost += usage.cost.total;
-	}
-	stats.cacheHitRates = calculateCacheHitRates(assistantUsages);
-	return stats;
 }
 
 function shortenHomePath(value: string): string {
