@@ -18,6 +18,7 @@ export interface UiMetaTurnStart {
 	kind: "turn_start";
 	title?: string;
 	session?: UiMetaSessionDirective;
+	task?: UiMetaSessionDirective;
 }
 
 export interface UiMetaTurnEnd {
@@ -102,12 +103,14 @@ function parseRecord(
 				? sanitizeUiMetaText(value.title, limits.title)
 				: undefined;
 		const session = parseSessionDirective(value.session, limits);
-		if (!title && !session) return undefined;
+		const task = parseSessionDirective(value.task, limits);
+		if (!title && !session && !task) return undefined;
 		return {
 			v: 1,
 			kind: "turn_start",
 			...(title ? { title } : {}),
 			...(session ? { session } : {}),
+			...(task ? { task } : {}),
 		};
 	}
 

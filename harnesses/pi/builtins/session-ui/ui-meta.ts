@@ -10,6 +10,7 @@ import {
 	beginUiMetaRun,
 	canCommitUiMetaRecap,
 	extractUiMetaRecords,
+	sanitizeUiMetaText,
 	stripUiMetaBlocks,
 	UI_META_SENTINEL,
 	type UiMetaLimits,
@@ -27,6 +28,7 @@ interface UiMetaStateData {
 	v: 1;
 	title?: string;
 	autoSessionName?: string;
+	task?: { name: string };
 }
 
 interface TurnRecapData {
@@ -100,7 +102,10 @@ function appendRequestToLatestUserMessage(
 	return next;
 }
 
-function latestStoredState(ctx: ExtensionContext): UiMetaStateData | undefined {
+function latestStoredState(
+	ctx: ExtensionContext,
+	limits: UiMetaLimits,
+): UiMetaStateData | undefined {
 	const branch = ctx.sessionManager.getBranch();
 	for (let i = branch.length - 1; i >= 0; i--) {
 		const entry = branch[i];
@@ -114,7 +119,12 @@ function latestStoredState(ctx: ExtensionContext): UiMetaStateData | undefined {
 		}
 		const data = entry.data as Partial<UiMetaStateData>;
 		if (data.v !== 1) continue;
+		const name =
+			typeof data.task?.name === "string"
+				? sanitizeUiMetaText(data.task.name, limits.sessionName)
+				: "";
 		return {
+			...(name ? { task: { name } } : {}),
 			v: 1,
 			...(typeof data.title === "string" && data.title
 				? { title: data.title }
@@ -136,7 +146,7 @@ When the marker is present:
 ${
 	startEnabled
 		? `- If needStart is true, begin the first assistant message with exactly one raw single-line ${UI_META_SENTINEL}{JSON} record before prose or tool calls.
-- The start JSON schema is {"v":1,"kind":"turn_start","title":"...","session":{"action":"keep"}} or {"v":1,"kind":"turn_start","title":"...","session":{"action":"set","name":"..."}}.
+- The start JSON schema is {"v":1,"kind":"turn_start","title":"...","session":{"action":"keep"}}. The session directive may instead be {"action":"set","name":"..."}. Task directives, when requested below, are an additional field with their own set/keep rules.
 - title describes the immediate action for the latest user turn (what is being done now), not the whole conversation. Maximum ${config.title.maxLength} visible characters.${config.title.enabled ? "" : " Omit title because title metadata is disabled."}
 - session.name describes the current high-level goal of the whole session. Use session.action=set only for the first clear goal or when the user replaces it with a different high-level goal. Use keep for continuations, refinements, tests, reviews, or subtasks.${config.sessionName.enabled ? ` Maximum ${config.sessionName.maxLength} visible characters.` : " Omit session because session-name metadata is disabled."}`
 		: "- Do not emit turn_start metadata because start metadata is disabled."
@@ -144,7 +154,11 @@ ${
 ${
 	config.recap.enabled
 		? `- In the final assistant message that completes the request and contains no tool calls, end with exactly one raw single-line ${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"..."} record.
-- recap states what was actually completed, partially completed, or blocked in this agent run. It is an outcome, not a plan. Maximum ${config.recap.maxLength} visible characters.`
+- When needStart is true, include task in turn_start: {"action":"set","name":"..."} when currentTaskName is null or the user starts a genuinely different goal; use {"action":"keep"} only when continuing an existing currentTaskName. If needStart is false, infer the current task from the conversation without emitting turn_start. Task metadata is a best-effort hint; missing task metadata must not prevent emitting recap. Task names are limited to ${config.sessionName.maxLength} visible characters. Follow-ups, corrections, tests and explanations of the same goal keep the task. Task identity is independent of session naming and its manual lock.
+- A task is bounded by the outcome the user wants to achieve, not by an individual message, tool call, action, or workflow phase. Clarifying requirements, discussing a solution, implementing it, testing it, and correcting it remain one task when they serve that same outcome. Set a new task only when the user starts or replaces that outcome with a different goal; do not merge unrelated goals merely because they share a topic.
+- recap is the latest overall status of the current task across all relevant conversation turns, NOT a report of only this agent run. Select the most important still-valid accomplishments, unresolved blockers and verification gaps; replace superseded claims with the latest evidence. Never carry results from a different task or invent facts missing from available context. Maximum ${config.recap.maxLength} visible characters.
+- Describe the stage actually reached. Confirmed requirements, proposed or agreed solutions, implemented changes, and verified results are distinct states. Discussion, agreement, or a plan is not implementation; implementation is not verification. For discussion-only tasks, summarize what was clarified or decided and what remains unresolved, without implying that code was changed or tests ran. If implementation is part of the goal but has not begun, say so when relevant. Treat suggestions as proposals unless the user accepted them.
+- Provide a concise, standalone current status of the ongoing task within the character limit, not a delta or a summary limited to the latest response. Prioritize the latest overall state, open blockers and verification gaps; omit lower-priority historical detail rather than attempting an exhaustive history. Recap is display-only and is not fed back as evidence.`
 		: "- Do not emit turn_end metadata because recap metadata is disabled."
 }
 - Put each metadata record on its own physical line. The sentinel is the complete envelope; do not add XML tags, a closing marker, Markdown fences, quotes around the record, or an explanation.
@@ -180,8 +194,10 @@ export function registerUiMeta(
 	let autoSessionName: string | undefined;
 	let pendingAutoSessionName: string | undefined;
 	let manualSessionNameLocked = false;
-	let pendingRecaps: TurnRecapData[] = [];
+	let currentTask: UiMetaStateData["task"];
+	let taskReceived = !config.recap.enabled;
 	let stateDirty = false;
+	let pendingRecaps: TurnRecapData[] = [];
 
 	const buildRequestMarker = (needStart: boolean, needRecap: boolean) =>
 		`<ui_meta_request>${JSON.stringify({
@@ -189,12 +205,14 @@ export function registerUiMeta(
 			needStart,
 			needRecap,
 			currentTitle: currentTitle || null,
+			currentTaskName: currentTask?.name ?? null,
 			currentSessionName: pi.getSessionName()?.trim() || null,
 			sessionNameLocked: manualSessionNameLocked,
 		})}</ui_meta_request>`;
 
 	const restoreState = (ctx: ExtensionContext) => {
-		const stored = latestStoredState(ctx);
+		const stored = latestStoredState(ctx, limits);
+		currentTask = stored?.task;
 		currentTitle = stored?.title ?? "";
 		pendingAutoSessionName = undefined;
 		const currentName = pi.getSessionName()?.trim();
@@ -222,6 +240,7 @@ export function registerUiMeta(
 			v: 1,
 			...(currentTitle ? { title: currentTitle } : {}),
 			...(autoSessionName ? { autoSessionName } : {}),
+			...(currentTask ? { task: { ...currentTask } } : {}),
 		});
 		stateDirty = false;
 	};
@@ -245,7 +264,10 @@ export function registerUiMeta(
 		pi.setSessionName(name);
 	};
 
-	const applyRecords = (records: UiMetaRecord[], allowRecap: boolean) => {
+	const applyRecords = (
+		records: UiMetaRecord[],
+		allowRecap: boolean,
+	) => {
 		if (!enabledForSession || !requestActive) return;
 		for (const record of records) {
 			if (record.kind === "turn_start" && !startReceived) {
@@ -254,6 +276,13 @@ export function registerUiMeta(
 					!config.sessionName.enabled ||
 					manualSessionNameLocked ||
 					Boolean(record.session);
+				if (config.recap.enabled && !taskReceived && record.task) {
+					if (record.task.action === "set") {
+						currentTask = { name: record.task.name };
+						stateDirty = true;
+					}
+					taskReceived = Boolean(currentTask);
+				}
 				startReceived = titleSatisfied && sessionSatisfied;
 				if (config.title.enabled && record.title && record.title !== currentTitle) {
 					currentTitle = record.title;
@@ -297,6 +326,8 @@ export function registerUiMeta(
 		continueAfterCompaction = false;
 		startReceived = !startMetadataEnabled;
 		recapReceived = !config.recap.enabled;
+		currentTask = undefined;
+		taskReceived = !config.recap.enabled;
 		pendingRecaps = [];
 		if (!enabledForSession) return;
 		restoreState(ctx);
@@ -307,6 +338,7 @@ export function registerUiMeta(
 		flushPendingEntries();
 		const isCompactionContinuation = continueAfterCompaction && requestActive;
 		continueAfterCompaction = false;
+		if (!isCompactionContinuation) taskReceived = !config.recap.enabled;
 		requestActive = true;
 		({ startReceived, recapReceived } = beginUiMetaRun(
 			startMetadataEnabled,
@@ -390,13 +422,19 @@ export function registerUiMeta(
 
 	pi.on("session_tree", (_event, ctx) => {
 		if (!enabledForSession) return;
-		flushPendingEntries();
+		// Navigation has already selected a different branch; never flush old state into it.
+		stateDirty = false;
+		pendingRecaps = [];
+		requestActive = false;
+		requestMarker = "";
+		taskReceived = !config.recap.enabled;
 		continueAfterCompaction = false;
 		restoreState(ctx);
 	});
 
 	pi.on("session_shutdown", () => {
 		if (enabledForSession) flushPendingEntries();
+		currentTask = undefined;
 		titleController.setWorking(false);
 		enabledForSession = false;
 		requestActive = false;

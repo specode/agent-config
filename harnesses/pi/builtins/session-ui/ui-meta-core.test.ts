@@ -69,6 +69,23 @@ test("extracts typed start and end records from sentinel lines", () => {
 	]);
 });
 
+test("accepts independent task directives and task progress recaps", () => {
+	assert.deepEqual(extractUiMetaRecords([
+		meta({ v: 1, kind: "turn_start", task: { action: "set", name: "Feature\u001b[31m A" } }),
+		"Explanation only",
+		meta({ v: 1, kind: "turn_end", recap: "Implemented; tests pending" }),
+	].join("\n"), limits), [
+		{ v: 1, kind: "turn_start", task: { action: "set", name: "Feature A" } },
+		{ v: 1, kind: "turn_end", recap: "Implemented; tests pending" },
+	]);
+	assert.deepEqual(extractUiMetaRecords(meta({
+		v: 1, kind: "turn_start", task: { action: "keep" },
+	}), limits), [{ v: 1, kind: "turn_start", task: { action: "keep" } }]);
+	for (const task of [{ action: "set" }, { action: "set", name: " " }, { action: "unknown" }]) {
+		assert.deepEqual(extractUiMetaRecords(meta({ v: 1, kind: "turn_start", task }), limits), []);
+	}
+});
+
 test("accepts keep and ignores malformed or unsupported records", () => {
 	const text = [
 		meta({ v: 1, kind: "turn_start", session: { action: "keep" } }),
