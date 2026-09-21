@@ -165,6 +165,13 @@ test("maps the three source categories to Pi runtime paths without installing in
 	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
 });
 
+test("retired approval plugin configs are absent", () => {
+	const configRoot = join(ROOT, "harnesses/pi/plugin-configs");
+	for (const name of ["automode", "pi-auto-review", "pi-permission-system"]) {
+		assert.equal(existsSync(join(configRoot, name)), false, name);
+	}
+});
+
 test("each builtin owns its index and all relative entry imports stay inside its directory", () => {
 	const root = join(ROOT, "harnesses/pi/builtins");
 	for (const entry of readdirSync(root, { withFileTypes: true })) {
