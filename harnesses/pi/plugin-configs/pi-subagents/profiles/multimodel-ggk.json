@@ -10,16 +10,16 @@
 				"thinking": "xhigh"
 			},
 			"researcher": {
-				"model": "xai/grok-4.6",
-				"thinking": "high"
+				"model": "xai/grok-4.7",
+				"thinking": "xhigh"
 			},
 			"worker": {
 				"model": "openai-codex/gpt-6-astra",
 				"thinking": "medium"
 			},
 			"reviewer": {
-				"model": "xai/grok-4.6",
-				"thinking": "high",
+				"model": "xai/grok-4.7",
+				"thinking": "xhigh",
 				"defaultContext": "fresh",
 				"acceptanceRole": "read-only"
 			},
