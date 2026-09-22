@@ -25,7 +25,7 @@
 **安装前注意：**
 
 - 配置不会与现有设置逐项合并。
-- Pi 默认开启 OpenAI Fast，可能增加额度消耗。
+- Pi 默认开启 Fast（Codex 与 Grok 4.7），可能增加额度消耗。
 - Claude Code 默认使用 `auto` 权限模式。
 
 ## 使用说明
@@ -67,7 +67,7 @@
 | 插件 | 用途 | 怎么用 |
 | --- | --- | --- |
 | [session-ui](harnesses/pi/builtins/session-ui/README.md) | 工具活动、图片预览、状态栏与自动标题 | 自动生效；`/effort` 选思考档位，`/statusline` 切换状态栏 |
-| [Fast](harnesses/pi/builtins/fast/README.md) | Codex 尝试 priority；Grok 4.7 切到代理 fast 模型 | `/fast status` 查看，`/fast off` 临时关闭 |
+| [Fast](harnesses/pi/builtins/fast/README.md) | Codex 尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
 | `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
 | SoL-Pi | 优化工具输出与上下文 | 随工具调用工作 |
@@ -91,8 +91,8 @@
 **界面与 Fast**
 
 - session-ui：修改 `~/.pi/agent/extensions/session-ui/config.json`，详见[功能与配置说明](harnesses/pi/builtins/session-ui/README.md)。
-- 永久关闭 Fast：将 `~/.pi/agent/extensions/fast.json` 的 `enabled` 改为 `false`，再执行 `/reload`。
-- `fast` 标记只表示开关已启用，不代表后端已确认加速。
+- 关闭 Fast：在 Pi 里对该 provider 执行 `/fast off`，选择保存在 `~/.pi/agent/state/fast.json`。`~/.pi/agent/extensions/fast.json` 的 `enabled` 只是还没设过开关时的默认值。
+- `fast` 标记只表示开关已启用并已装上，不代表后端已确认加速。
 
 **子代理与搜索**
 

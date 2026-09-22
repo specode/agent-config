@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
@@ -26,6 +32,13 @@ type Model = NonNullable<ExtensionContext["model"]> & {
 	};
 	thinkingLevelMap?: Record<string, string | null>;
 };
+type StateFile = {
+	version: number;
+	providers: Record<string, { enabled: boolean; updatedAt: string }>;
+};
+
+const PROXY_URL = "https://cli-chat-proxy.grok.com/v1";
+const CLIENT_VERSION = "1.0.40";
 
 function grokBase(): Model {
 	return {
@@ -58,10 +71,15 @@ function grokBase(): Model {
 	} as Model;
 }
 
-async function harness(t: TestContext, raw: unknown = { enabled: true }) {
+async function harness(
+	t: TestContext,
+	raw: unknown = { enabled: true },
+	stateRaw?: unknown,
+) {
 	const dir = mkdtempSync(join(tmpdir(), "pi-fast-test-"));
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
 	const configPath = join(dir, "fast.json");
+	const statePath = join(dir, "state", "fast.json");
 	if (raw !== undefined) writeFileSync(configPath, JSON.stringify(raw));
 	const handlers = new Map<string, Handler>();
 	let command!: Command;
@@ -108,7 +126,7 @@ async function harness(t: TestContext, raw: unknown = { enabled: true }) {
 			return true;
 		},
 	} as unknown as ExtensionAPI;
-	registerFast(pi, configPath);
+	registerFast(pi, configPath, statePath);
 	function call(event: string, payload?: unknown, context = ctx) {
 		const handler = handlers.get(event);
 		assert.ok(handler, `registered ${event}`);
@@ -119,12 +137,30 @@ async function harness(t: TestContext, raw: unknown = { enabled: true }) {
 	async function emit(event: string, payload?: unknown, context = ctx) {
 		return await call(event, payload, context);
 	}
+	function writeState(value: unknown): void {
+		mkdirSync(join(dir, "state"), { recursive: true });
+		writeFileSync(
+			statePath,
+			typeof value === "string" ? value : JSON.stringify(value),
+		);
+	}
+	if (stateRaw !== undefined) writeState(stateRaw);
 	await emit("session_start");
 	return {
 		ctx,
+		dir,
 		emit,
 		notices,
 		configPath,
+		statePath,
+		writeState,
+		state: (): StateFile | undefined => {
+			try {
+				return JSON.parse(readFileSync(statePath, "utf8")) as StateFile;
+			} catch {
+				return undefined;
+			}
+		},
 		command: (args: string, context = ctx) => command.handler(args, context),
 		complete: (prefix: string) => command.getArgumentCompletions(prefix),
 		footer: () => footer,
@@ -174,8 +210,6 @@ for (const tier of ["auto", "default", "priority", "flex", null, undefined]) {
 		assert.equal(h.request(payload), undefined);
 		assert.equal(payload.service_tier, tier);
 		assert.equal(h.footer(), "fast");
-		await h.command("status");
-		assert.match(h.notices.at(-1)!, /existing service_tier preserved/);
 		await h.command("off");
 		assert.equal(h.request(payload), undefined);
 		assert.equal("service_tier" in payload, true);
@@ -183,8 +217,8 @@ for (const tier of ["auto", "default", "priority", "flex", null, undefined]) {
 	});
 }
 
-test("checks provider, API, auth, missing model, and exact exclusions", async (t) => {
-	const h = await harness(t, { enabled: true, excludeModels: ["excluded"] });
+test("checks provider, API, auth, and missing model", async (t) => {
+	const h = await harness(t);
 	const model = { ...h.ctx.model! };
 	h.ctx.model!.provider = "openai";
 	assert.equal(h.request(), undefined);
@@ -194,26 +228,21 @@ test("checks provider, API, auth, missing model, and exact exclusions", async (t
 	h.ctx.modelRegistry.isUsingOAuth = () => false;
 	assert.equal(h.request(), undefined);
 	h.ctx.modelRegistry.isUsingOAuth = () => true;
-	h.ctx.model!.id = "excluded";
-	assert.equal(h.request(), undefined);
 	h.ctx.model = undefined;
 	assert.equal(h.request(), undefined);
-	h.ctx.model = { ...model, id: "excluded-but-not-exact" };
-	assert.deepEqual(h.request(), {
-		model: "excluded-but-not-exact",
-		service_tier: "priority",
-	});
+	h.ctx.model = { ...model };
+	assert.ok(h.request());
 	assert.equal(h.switches().length, 0);
 });
 
-test("rejected payload details are queryable without changing the enabled badge", async (t) => {
+test("a rejected payload is left alone without clearing the enabled badge", async (t) => {
 	const h = await harness(t);
 	assert.equal(h.footer(), "fast");
 	for (const payload of [null, [], "body", 42, {}, { model: "another-model" }]) {
 		assert.equal(h.request(payload), undefined);
 		assert.equal(h.footer(), "fast");
 		await h.command("status");
-		assert.match(h.notices.at(-1)!, /invalid payload or model mismatch/);
+		assert.equal(h.notices.at(-1), "Fast: on");
 	}
 });
 
@@ -224,8 +253,7 @@ test("on/off are idempotent; status and invalid commands do not toggle", async (
 	await h.command("on");
 	assert.ok(h.request());
 	await h.command("status");
-	assert.match(h.notices.at(-1)!, /on \(session override\)/);
-	assert.match(h.notices.at(-1)!, /Effective backend tier: unknown/);
+	assert.equal(h.notices.at(-1), "Fast: on");
 	await h.command("invalid");
 	assert.match(h.notices.at(-1)!, /Usage/);
 	assert.ok(h.request());
@@ -243,70 +271,147 @@ test("on/off are idempotent; status and invalid commands do not toggle", async (
 	);
 });
 
-test("model changes clear request observations but retain the override", async (t) => {
+test("the switch is saved per provider and survives a restart", async (t) => {
+	const h = await harness(t, { enabled: false });
+	await h.command("on");
+	assert.equal(h.state()?.providers["openai-codex"]?.enabled, true);
+	assert.equal("xai" in h.state()!.providers, false);
+	await h.emit("session_start");
+	assert.ok(h.request(), "saved switch survives a reload");
+	await h.command("off");
+	assert.equal(h.state()?.providers["openai-codex"]?.enabled, false);
+	await h.emit("session_start");
+	assert.equal(h.request(), undefined);
+});
+
+test("providers keep independent switches and the config default only fills gaps", async (t) => {
+	const h = await harness(t, { enabled: true });
+	await h.command("off");
+	assert.equal(h.request(), undefined, "codex switched off");
+	h.ctx.modelRegistry.find = () => grokBase();
+	h.ctx.model = grokBase();
+	await h.emit("model_select");
+	assert.equal(
+		h.ctx.model?.baseUrl,
+		PROXY_URL,
+		"xai still follows the config default",
+	);
+	await h.command("status");
+	assert.equal(h.notices.at(-1), "Fast: on");
+	await h.command("off");
+	assert.equal(h.state()?.providers["openai-codex"]?.enabled, false);
+	assert.equal(h.state()?.providers.xai?.enabled, false);
+});
+
+test("a provider without a fast strategy is never written to the state file", async (t) => {
+	const h = await harness(t, { enabled: true });
+	h.ctx.model = {
+		id: "k3",
+		provider: "kimi-coding",
+		api: "anthropic-messages",
+	} as Model;
+	await h.command("on");
+	assert.equal(
+		h.notices.at(-1),
+		"Fast: unavailable (no fast strategy for this provider)",
+	);
+	assert.equal(h.state(), undefined);
+	await h.command("status");
+	assert.equal(
+		h.notices.at(-1),
+		"Fast: unavailable (no fast strategy for this provider)",
+	);
+	assert.equal(h.footer(), undefined);
+});
+
+test("a concurrent writer keeps its own provider entry", async (t) => {
+	const h = await harness(t, { enabled: false });
+	h.writeState({
+		version: 1,
+		providers: {
+			xai: { enabled: true, updatedAt: "2026-09-22T12:00:00.000Z" },
+		},
+	});
+	await h.command("on");
+	assert.equal(h.state()?.providers.xai?.enabled, true);
+	assert.equal(h.state()?.providers["openai-codex"]?.enabled, true);
+});
+
+test("an unwritable state file keeps the session working and warns", async (t) => {
+	const h = await harness(t, { enabled: false });
+	writeFileSync(join(h.dir, "state"), "not a directory");
+	await h.command("on");
+	assert.equal(h.notices.at(-1), "Fast: on, this session only (switch not saved)");
+	assert.ok(h.request(), "the switch still applies to this session");
+	await h.emit("session_start");
+	assert.equal(h.request(), undefined, "nothing was persisted");
+});
+
+for (const invalid of [
+	"{",
+	JSON.stringify({ version: 2, providers: {} }),
+	JSON.stringify({ version: 1, providers: { xai: { enabled: "yes" } } }),
+	JSON.stringify({ version: 1 }),
+]) {
+	test(`an invalid state file falls back to the config default: ${invalid.slice(0, 24)}`, async (t) => {
+		const h = await harness(t, { enabled: true }, invalid);
+		assert.match(h.notices[0]!, /could not read/);
+		assert.ok(h.request(), "config default still applies");
+		await h.command("off");
+		assert.equal(h.request(), undefined);
+		assert.equal(h.state()?.providers["openai-codex"]?.enabled, false);
+	});
+}
+
+test("model changes keep the saved switch", async (t) => {
 	const h = await harness(t, { enabled: false });
 	await h.command("on");
 	h.request();
 	assert.equal(h.footer(), "fast");
-	h.ctx.model!.provider = "xai";
+	h.ctx.model = { id: "k3", provider: "kimi-coding", api: "x" } as Model;
 	await h.emit("model_select");
 	assert.equal(h.footer(), undefined);
 	await h.command("status");
-	assert.match(h.notices.at(-1)!, /on \(session override\)/);
-	assert.match(h.notices.at(-1)!, /no fast strategy for this model/);
-	h.ctx.model!.provider = "openai-codex";
+	assert.match(h.notices.at(-1)!, /no fast strategy for this provider/);
+	h.ctx.model = {
+		id: "gpt-6-astra",
+		provider: "openai-codex",
+		api: "openai-codex-responses",
+	} as Model;
 	await h.emit("model_select");
 	assert.equal(h.footer(), "fast");
 	await h.command("status");
-	assert.doesNotMatch(h.notices.at(-1)!, /Last request handling/);
+	assert.equal(h.notices.at(-1), "Fast: on");
 	assert.ok(h.request());
 });
 
-test("session start/reload/resume reset overrides and reread config", async (t) => {
-	const h = await harness(t);
-	await h.command("off");
-	assert.equal(h.request(), undefined);
-	await h.emit("session_start");
-	assert.ok(h.request());
-	writeFileSync(h.configPath, JSON.stringify({ enabled: false }));
-	await h.emit("session_start");
-	assert.equal(h.request(), undefined);
-	await h.command("status");
-	assert.match(h.notices.at(-1)!, /off \(global config\)/);
-	assert.doesNotMatch(h.notices.at(-1)!, /added service_tier/);
-});
-
-test("session state is isolated and shutdown clears its footer and override", async (t) => {
+test("session state is isolated and shutdown clears its footer", async (t) => {
 	const h = await harness(t, { enabled: false });
 	await h.command("on");
 	const second = { ...h.ctx, sessionManager: {} } as ExtensionContext;
 	await h.emit("session_start", undefined, second);
-	assert.equal(
+	assert.ok(
 		await h.emit("before_provider_request", { model: second.model!.id }, second),
-		undefined,
+		"a new session reads the saved switch",
 	);
-	assert.ok(h.request());
 	await h.emit("session_shutdown");
 	assert.equal(h.footer(), undefined);
-	await h.emit("session_start");
-	assert.equal(h.request(), undefined);
 });
 
 test("footer only shows fast when enabled and eligible", async (t) => {
-	const h = await harness(t, { enabled: true, excludeModels: ["excluded"] });
+	const h = await harness(t, { enabled: true });
 	assert.equal(h.footer(), "fast");
 	const original = { ...h.ctx.model! };
 	for (const model of [
 		{ ...original, provider: "openai" },
 		{ ...original, api: "openai-responses" },
-		{ ...original, id: "excluded" },
 		undefined,
 	]) {
 		h.ctx.model = model;
 		await h.emit("model_select");
 		assert.equal(h.footer(), undefined);
 		await h.command("status");
-		assert.match(h.notices.at(-1)!, /No fast action:/);
+		assert.match(h.notices.at(-1)!, /^Fast: unavailable \(/);
 	}
 	h.ctx.model = original;
 	h.ctx.modelRegistry.isUsingOAuth = () => false;
@@ -320,8 +425,7 @@ test("footer only shows fast when enabled and eligible", async (t) => {
 	await h.command("off");
 	assert.equal(h.footer(), undefined);
 	await h.command("status");
-	assert.match(h.notices.at(-1)!, /off \(session override\)/);
-	assert.equal(h.footer(), undefined);
+	assert.equal(h.notices.at(-1), "Fast: off");
 });
 
 test("showStatus=false and non-UI requests do not affect injection", async (t) => {
@@ -341,22 +445,17 @@ for (const raw of [
 	[],
 	{ enabled: "true" },
 	{ enabled: true, showStatus: 1 },
-	{ enabled: true, excludeModels: "gpt-6" },
-	{ enabled: true, excludeModels: [123] },
-	{ enabled: true, excludeModels: [""] },
-	{ enabled: true, excludeModels: [" gpt-6"] },
-	{ enabled: true, excludedModels: ["gpt-6"] },
+	{ enabled: true, excludeModels: [] },
+	{ enabled: true, grokClientVersion: 1 },
+	{ enabled: true, grokClientVersion: "1.0.40 (spoofed)" },
+	{ enabled: true, enabledModels: ["gpt-6"] },
 ]) {
 	test(`invalid config fails closed: ${JSON.stringify(raw)}`, async (t) => {
 		const h = await harness(t, raw);
 		assert.equal(h.request(), undefined);
-		assert.match(h.notices[0], /config is invalid/);
+		assert.match(h.notices[0]!, /config is invalid/);
 		await h.command("on");
-		assert.equal(
-			h.request(),
-			undefined,
-			"on must not bypass invalid exclusion config",
-		);
+		assert.equal(h.request(), undefined, "on must not bypass an invalid config");
 		assert.equal(h.footer(), undefined);
 		assert.equal(h.switches().length, 0);
 	});
@@ -375,18 +474,56 @@ test("missing config defaults off; malformed JSON disables injection", async (t)
 	assert.match(h.notices.at(-1)!, /config is invalid/);
 });
 
-test("request history reports preparation, never server confirmation", async (t) => {
+test("the command answers with one line and nothing else", async (t) => {
 	const h = await harness(t);
 	h.request();
-	await h.command("status");
-	assert.match(
-		h.notices.at(-1)!,
-		/not proof of final transmission or backend confirmation/,
-	);
-	assert.match(h.notices.at(-1)!, /Effective backend tier: unknown/);
+	for (const action of ["status", "off", "on", ""]) {
+		await h.command(action);
+		assert.match(h.notices.at(-1)!, /^Fast: (on|off)$/);
+	}
 });
 
-test("switches Grok 4.7 to the proxy fast model without adding service_tier", async (t) => {
+test("an unsupported model reports failure and drops a stale saved switch", async (t) => {
+	const h = await harness(t, { enabled: false });
+	h.ctx.modelRegistry.find = () => grokBase();
+	h.ctx.model = grokBase();
+	await h.command("on");
+	assert.equal(h.state()?.providers.xai?.enabled, true);
+	h.ctx.model = { ...grokBase(), id: "grok-4.6" } as Model;
+	await h.emit("model_select");
+	await h.command("");
+	assert.equal(
+		h.notices.at(-1),
+		"Fast: unavailable (only xai/grok-4.7 has a fast variant on this provider)",
+	);
+	assert.equal(
+		h.state()?.providers.xai?.enabled,
+		false,
+		"the stale switch is overwritten, not left claiming fast",
+	);
+	await h.command("");
+	assert.equal(h.footer(), undefined);
+});
+
+test("a broken config reports failure without touching the saved switch", async (t) => {
+	const h = await harness(t, { enabled: false });
+	await h.command("on");
+	writeFileSync(h.configPath, "{");
+	await h.emit("session_start");
+	assert.equal(
+		h.notices.at(-1),
+		"Fast: unavailable (config is invalid; fix fast.json and /reload)",
+	);
+	await h.command("");
+	assert.match(h.notices.at(-1)!, /^Fast: unavailable \(config is invalid/);
+	assert.equal(
+		h.state()?.providers["openai-codex"]?.enabled,
+		true,
+		"a config failure is not stale switch state",
+	);
+});
+
+test("Grok keeps the catalog id and only swaps the transport", async (t) => {
 	const h = await harness(t);
 	const base = grokBase();
 	h.ctx.modelRegistry.find = () => grokBase();
@@ -394,14 +531,17 @@ test("switches Grok 4.7 to the proxy fast model without adding service_tier", as
 	await h.emit("model_select");
 	assert.equal(h.switches().length, 1);
 	const selected = h.switches()[0]!;
-	assert.equal(selected.id, "grok-4.7-build-fast");
-	assert.equal(selected.name, "Grok 4.7 Fast");
-	assert.equal(selected.baseUrl, "https://cli-chat-proxy.grok.com/v1");
+	assert.equal(selected.id, "grok-4.7", "never selects a model outside the catalog");
+	assert.equal(selected.provider, "xai");
+	assert.equal(selected.name, "Grok 4.7");
+	assert.equal(selected.baseUrl, PROXY_URL);
 	assert.equal(selected.api, "openai-responses");
 	assert.deepEqual(selected.headers, {
 		"X-XAI-Token-Auth": "xai-grok-cli",
 		"x-grok-model-override": "grok-4.7-build-fast",
 		"x-authenticateresponse": "authenticate-response",
+		"x-grok-client-identifier": "grok-shell",
+		"x-grok-client-version": CLIENT_VERSION,
 	});
 	assert.equal(selected.cost?.input, 4);
 	assert.equal(selected.cost?.output, 12);
@@ -412,14 +552,29 @@ test("switches Grok 4.7 to the proxy fast model without adding service_tier", as
 	assert.equal(selected.thinkingLevelMap?.xhigh, "xhigh");
 	assert.equal(h.footer(), "fast");
 	const payload = Object.freeze({
+		model: "grok-4.7",
+		reasoning: { effort: "xhigh" },
+	});
+	assert.deepEqual(h.request(payload), {
 		model: "grok-4.7-build-fast",
 		reasoning: { effort: "xhigh" },
 	});
-	assert.equal(h.request(payload), undefined);
 	assert.equal("service_tier" in payload, false);
 	await h.command("status");
-	assert.match(h.notices.at(-1)!, /Proxy acceptance: unknown/);
-	assert.match(h.notices.at(-1)!, /2x catalog rate/);
+	assert.equal(h.notices.at(-1), "Fast: on");
+	await h.emit("before_agent_start");
+	assert.equal(h.switches().length, 1, "an applied transport is not reapplied");
+});
+
+test("a configured client version reaches the proxy transport and headers", async (t) => {
+	const h = await harness(t, { enabled: true, grokClientVersion: "1.2.3" });
+	h.ctx.modelRegistry.find = () => grokBase();
+	h.ctx.model = grokBase();
+	await h.emit("model_select");
+	assert.equal(h.switches()[0]?.headers?.["x-grok-client-version"], "1.2.3");
+	const headers: Record<string, string | null> = {};
+	h.headers(headers);
+	assert.equal(headers["x-grok-client-version"], "1.2.3");
 });
 
 test("proxy header hook replaces a mismatched model override", async (t) => {
@@ -436,51 +591,48 @@ test("proxy header hook replaces a mismatched model override", async (t) => {
 	assert.equal("X-Grok-Model-Override" in headers, false);
 	assert.equal(headers["X-XAI-Token-Auth"], "xai-grok-cli");
 	assert.equal(headers["x-authenticateresponse"], "authenticate-response");
+	assert.equal(headers["x-grok-client-identifier"], "grok-shell");
+	assert.equal(headers["x-grok-client-version"], CLIENT_VERSION);
 	assert.equal(headers["x-session-id"], "keep");
 });
 
-test("fast off restores the catalog Grok model and stops proxy headers", async (t) => {
+test("fast off restores the public transport and stops proxy headers", async (t) => {
 	const h = await harness(t);
-	const base = grokBase();
-	h.ctx.modelRegistry.find = () => base;
+	h.ctx.modelRegistry.find = () => grokBase();
 	h.ctx.model = grokBase();
 	await h.emit("model_select");
 	await h.command("off");
 	assert.equal(h.switches().at(-1)?.id, "grok-4.7");
-	assert.equal(h.ctx.model?.id, "grok-4.7");
+	assert.equal(h.switches().at(-1)?.baseUrl, "https://api.x.ai/v1");
+	assert.equal(h.ctx.model?.baseUrl, "https://api.x.ai/v1");
+	assert.equal(h.ctx.model?.cost?.input, 2);
 	assert.equal(h.footer(), undefined);
 	const headers: Record<string, string | null> = {};
 	h.headers(headers);
 	assert.equal(Object.keys(headers).length, 0);
 	await h.command("off");
-	assert.equal(h.switches().length, 2);
+	assert.equal(h.switches().length, 2, "an already clean model is left alone");
+	assert.equal(h.request({ model: "grok-4.7" }), undefined);
 });
 
-test("Grok fast does not switch without OAuth or when excluded", async (t) => {
-	const h = await harness(t, {
-		enabled: true,
-		excludeModels: ["grok-4.7-build-fast"],
-	});
+test("Grok fast does not apply without xAI OAuth", async (t) => {
+	const h = await harness(t);
 	h.ctx.model = grokBase();
 	h.ctx.modelRegistry.isUsingOAuth = () => false;
 	await h.emit("model_select");
 	assert.equal(h.switches().length, 0);
 	await h.command("status");
 	assert.match(h.notices.at(-1)!, /requires xAI OAuth/);
-	h.ctx.modelRegistry.isUsingOAuth = () => true;
-	await h.emit("model_select");
-	assert.equal(h.switches().length, 0);
-	await h.command("status");
-	assert.match(h.notices.at(-1)!, /excludeModels/);
+	assert.equal(h.footer(), undefined);
 });
 
-test("failed model switch does not claim fast or rewrite the public API", async (t) => {
+test("failed transport swap does not claim fast or rewrite the public API", async (t) => {
 	const h = await harness(t);
 	h.failSwitch();
 	h.ctx.modelRegistry.find = () => grokBase();
 	h.ctx.model = grokBase();
 	await h.emit("model_select");
-	assert.equal(h.ctx.model?.id, "grok-4.7");
+	assert.equal(h.ctx.model?.baseUrl, "https://api.x.ai/v1");
 	assert.equal(h.footer(), undefined);
 	assert.equal(h.request({ model: "grok-4.7" }), undefined);
 	await h.command("status");
@@ -493,7 +645,7 @@ test("refuses to send the fast model id to the public xAI API", async (t) => {
 		...grokBase(),
 		id: "grok-4.7-build-fast",
 		baseUrl: "https://api.x.ai/v1",
-	} as ExtensionContext["model"];
+	} as Model;
 	const payload = Object.freeze({ model: "grok-4.7-build-fast", input: [] });
 	assert.deepEqual(h.request(payload), {
 		model: "grok-4.7",
@@ -504,24 +656,43 @@ test("refuses to send the fast model id to the public xAI API", async (t) => {
 	assert.equal("x-grok-model-override" in headers, false);
 });
 
-test("rewrites only a proxy request that still carries the standard model id", async (t) => {
+test("a legacy fast-id session is healed back to the catalog id", async (t) => {
 	const h = await harness(t);
+	h.ctx.modelRegistry.find = () => grokBase();
 	h.ctx.model = {
 		...grokBase(),
 		id: "grok-4.7-build-fast",
 		name: "Grok 4.7 Fast",
-		baseUrl: "https://cli-chat-proxy.grok.com/v1",
+		baseUrl: PROXY_URL,
 		headers: {
 			"X-XAI-Token-Auth": "xai-grok-cli",
 			"x-grok-model-override": "grok-4.7-build-fast",
 		},
-	} as ExtensionContext["model"];
+	} as Model;
 	await h.emit("model_select");
-	assert.equal(h.switches().length, 0);
-	assert.deepEqual(h.request({ model: "grok-4.7", store: false }), {
-		model: "grok-4.7-build-fast",
-		store: false,
-	});
+	assert.equal(h.ctx.model?.id, "grok-4.7");
+	assert.equal(h.ctx.model?.baseUrl, PROXY_URL);
+	assert.equal(h.footer(), "fast");
+	await h.command("off");
+	assert.equal(h.ctx.model?.id, "grok-4.7");
+	assert.equal(h.ctx.model?.baseUrl, "https://api.x.ai/v1");
+});
+
+test("an already proxied model without the client version is corrected", async (t) => {
+	const h = await harness(t);
+	h.ctx.modelRegistry.find = () => grokBase();
+	h.ctx.model = {
+		...grokBase(),
+		baseUrl: PROXY_URL,
+		headers: {
+			"X-XAI-Token-Auth": "xai-grok-cli",
+			"x-grok-model-override": "grok-4.7-build-fast",
+		},
+	} as Model;
+	await h.emit("model_select");
+	assert.equal(h.switches().length, 1);
+	assert.equal(h.ctx.model?.headers?.["x-grok-client-version"], CLIENT_VERSION);
+	assert.equal(h.ctx.model?.cost?.input, 4, "the base price is not doubled twice");
 });
 
 test("model_select during setModel does not recurse", async (t) => {
@@ -531,57 +702,34 @@ test("model_select during setModel does not recurse", async (t) => {
 	h.ctx.model = grokBase();
 	await h.emit("model_select");
 	assert.equal(h.switches().length, 1);
-	assert.equal(h.ctx.model?.id, "grok-4.7-build-fast");
+	assert.equal(h.ctx.model?.baseUrl, PROXY_URL);
 });
 
-test("a busy turn defers the Grok switch until the next turn", async (t) => {
+test("a busy turn defers the Grok transport until the next turn", async (t) => {
 	const h = await harness(t, { enabled: false });
 	h.ctx.model = grokBase();
 	h.ctx.modelRegistry.find = () => grokBase();
 	h.ctx.isIdle = () => false;
 	await h.command("on");
 	assert.equal(h.switches().length, 0);
-	assert.match(h.notices.at(-1)!, /deferred/);
+	assert.equal(h.notices.at(-1), "Fast: on, applies from the next turn");
+	assert.equal(h.state()?.providers.xai?.enabled, true, "the switch is saved now");
 	h.ctx.isIdle = () => true;
 	await h.emit("before_agent_start");
-	assert.equal(h.ctx.model?.id, "grok-4.7-build-fast");
-	assert.equal(h.footer(), "fast");
-});
-
-test("reload returns to config and can switch Grok again", async (t) => {
-	const h = await harness(t);
-	h.ctx.modelRegistry.find = () => grokBase();
-	h.ctx.model = grokBase();
-	await h.emit("model_select");
-	await h.command("off");
-	assert.equal(h.ctx.model?.id, "grok-4.7");
-	await h.emit("session_start");
-	assert.equal(h.ctx.model?.id, "grok-4.7-build-fast");
-	await h.command("status");
-	assert.match(h.notices.at(-1)!, /on \(global config\)/);
-});
-
-test("corrects a restored fast id onto the proxy without another model change", async (t) => {
-	const h = await harness(t);
-	h.ctx.modelRegistry.find = () => grokBase();
-	h.ctx.model = {
-		...grokBase(),
-		id: "grok-4.7-build-fast",
-		baseUrl: "https://api.x.ai/v1",
-	} as ExtensionContext["model"];
-	await h.emit("model_select");
-	assert.equal(h.switches().length, 0);
-	assert.equal(h.ctx.model?.baseUrl, "https://cli-chat-proxy.grok.com/v1");
-	assert.equal(h.ctx.model?.cost && "input" in h.ctx.model.cost ? h.ctx.model.cost.input : undefined, 4);
+	assert.equal(h.ctx.model?.baseUrl, PROXY_URL);
 	assert.equal(h.footer(), "fast");
 });
 
 test("other Grok models and APIs are left unchanged", async (t) => {
 	const h = await harness(t);
-	h.ctx.model = { ...grokBase(), id: "grok-4.6" } as ExtensionContext["model"];
+	h.ctx.model = { ...grokBase(), id: "grok-4.6" } as Model;
 	await h.emit("model_select");
-	h.ctx.model = { ...grokBase(), api: "openai-completions" } as ExtensionContext["model"];
+	await h.command("status");
+	assert.match(h.notices.at(-1)!, /only xai\/grok-4\.7 has a fast variant/);
+	assert.match(h.notices.at(-1)!, /^Fast: unavailable \(/);
+	h.ctx.model = { ...grokBase(), api: "openai-completions" } as Model;
 	await h.emit("model_select");
 	assert.equal(h.switches().length, 0);
 	assert.equal(h.footer(), undefined);
+	assert.equal(h.request({ model: "grok-4.6" }), undefined);
 });

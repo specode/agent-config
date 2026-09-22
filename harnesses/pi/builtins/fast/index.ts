@@ -6,5 +6,10 @@ import {
 import { registerFast } from "./runtime.ts";
 
 export default function fast(pi: ExtensionAPI) {
-	registerFast(pi, join(getAgentDir(), "extensions", "fast.json"));
+	const agentDir = getAgentDir();
+	registerFast(
+		pi,
+		join(agentDir, "extensions", "fast.json"),
+		join(agentDir, "state", "fast.json"),
+	);
 }

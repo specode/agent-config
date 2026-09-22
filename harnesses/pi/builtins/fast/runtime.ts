@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -6,6 +7,8 @@ import type {
 
 const STATUS_KEY = "fast";
 const USAGE = "Usage: /fast [on|off|status]";
+const CODEX_PROVIDER = "openai-codex";
+const CODEX_API = "openai-codex-responses";
 const GROK_PROVIDER = "xai";
 const GROK_API = "openai-responses";
 const GROK_BASE_ID = "grok-4.7";
@@ -13,11 +16,19 @@ const GROK_FAST_ID = "grok-4.7-build-fast";
 const GROK_PUBLIC_URL = "https://api.x.ai/v1";
 const GROK_PROXY_URL = "https://cli-chat-proxy.grok.com/v1";
 const GROK_PRICE_MULTIPLIER = 2;
-const PROXY_HEADERS = {
-	"X-XAI-Token-Auth": "xai-grok-cli",
-	"x-grok-model-override": GROK_FAST_ID,
-	"x-authenticateresponse": "authenticate-response",
-} as const;
+/** The proxy rejects callers that report no Grok CLI build, so requests claim one. */
+const GROK_CLIENT_VERSION = "1.0.40";
+const GROK_CLIENT_IDENTIFIER = "grok-shell";
+
+function proxyHeaders(clientVersion: string): Record<string, string> {
+	return {
+		"X-XAI-Token-Auth": "xai-grok-cli",
+		"x-grok-model-override": GROK_FAST_ID,
+		"x-authenticateresponse": "authenticate-response",
+		"x-grok-client-identifier": GROK_CLIENT_IDENTIFIER,
+		"x-grok-client-version": clientVersion,
+	};
+}
 
 type Cost = {
 	input: number;
@@ -40,20 +51,21 @@ type ModelLike = {
 type Config = {
 	enabled: boolean;
 	showStatus: boolean;
-	excludeModels: string[];
+	grokClientVersion: string;
 };
+/** Persisted per-provider switch; providers without an entry follow the config default. */
+type ProviderSwitch = { enabled: boolean; updatedAt: string };
+type Switches = Record<string, ProviderSwitch>;
 type State = {
 	config: Config;
+	switches: Switches;
 	warning?: string;
-	override?: boolean;
+	stateWarning?: string;
 	applying: boolean;
 	deferred: boolean;
+	saveFailed: boolean;
 	baseSnapshot?: ModelLike;
-	lastSwitch?: string;
-	lastRequest?: {
-		modelKey: string;
-		detail: string;
-	};
+	switchFailure?: string;
 };
 type HeaderMap = Record<string, string | null>;
 
@@ -61,20 +73,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isModel(value: unknown): value is ModelLike {
-	return (
-		isRecord(value) &&
-		typeof value.id === "string" &&
-		typeof value.provider === "string" &&
-		typeof value.api === "string"
-	);
+function isMissingFile(error: unknown): boolean {
+	return isRecord(error) && error.code === "ENOENT";
 }
 
 function loadConfig(path: string): Pick<State, "config" | "warning"> {
 	const defaults: Config = {
 		enabled: false,
 		showStatus: true,
-		excludeModels: [],
+		grokClientVersion: GROK_CLIENT_VERSION,
 	};
 	try {
 		const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
@@ -88,42 +95,104 @@ function loadConfig(path: string): Pick<State, "config" | "warning"> {
 				throw new Error(`${key} must be a boolean`);
 		}
 		if (
-			"excludeModels" in raw &&
-			(!Array.isArray(raw.excludeModels) ||
-				!raw.excludeModels.every(
-					(id) => typeof id === "string" && id.length > 0 && id.trim() === id,
-				))
+			"grokClientVersion" in raw &&
+			(typeof raw.grokClientVersion !== "string" ||
+				!/^[\w.+-]+$/.test(raw.grokClientVersion))
 		) {
 			throw new Error(
-				"excludeModels must be an array of non-empty model IDs (exact matches)",
+				"grokClientVersion must be a version string such as \"1.0.40\"",
 			);
 		}
 		return {
 			config: {
 				enabled: (raw.enabled as boolean | undefined) ?? defaults.enabled,
-				showStatus: (raw.showStatus as boolean | undefined) ?? defaults.showStatus,
-				excludeModels:
-					(raw.excludeModels as string[] | undefined) ?? defaults.excludeModels,
+				showStatus:
+					(raw.showStatus as boolean | undefined) ?? defaults.showStatus,
+				grokClientVersion:
+					(raw.grokClientVersion as string | undefined) ??
+					defaults.grokClientVersion,
 			},
 		};
 	} catch (error) {
-		if (isRecord(error) && error.code === "ENOENT") return { config: defaults };
+		if (isMissingFile(error)) return { config: defaults };
 		return {
 			config: defaults,
-			warning:
-				"Fast config is invalid or unreadable; fast mode disabled. Fix fast.json and /reload",
+			warning: "config is invalid; fix fast.json and /reload",
 		};
 	}
 }
 
-function modelKey(ctx: ExtensionContext): string {
-	return ctx.model
-		? `${ctx.model.provider}/${ctx.model.id}`
-		: "no model selected";
+function parseSwitches(value: unknown): Switches | undefined {
+	if (!isRecord(value) || value.version !== 1 || !isRecord(value.providers))
+		return undefined;
+	const switches: Switches = {};
+	for (const [provider, entry] of Object.entries(value.providers)) {
+		if (
+			!isRecord(entry) ||
+			typeof entry.enabled !== "boolean" ||
+			typeof entry.updatedAt !== "string" ||
+			Number.isNaN(Date.parse(entry.updatedAt))
+		) {
+			return undefined;
+		}
+		switches[provider] = { enabled: entry.enabled, updatedAt: entry.updatedAt };
+	}
+	return switches;
 }
 
-function enabled(state: State): boolean {
-	return state.override ?? state.config.enabled;
+function loadSwitches(path: string): {
+	switches: Switches;
+	stateWarning?: string;
+} {
+	try {
+		const parsed = parseSwitches(JSON.parse(readFileSync(path, "utf8")));
+		if (!parsed) throw new Error("State must be a version 1 switch record");
+		return { switches: parsed };
+	} catch (error) {
+		if (isMissingFile(error)) return { switches: {} };
+		return {
+			switches: {},
+			stateWarning: `Fast could not read ${path}; the config default applies until the switch is set again`,
+		};
+	}
+}
+
+/** Re-reads before writing so a concurrent Pi only loses the provider it changed. */
+function saveSwitch(path: string, provider: string, enabled: boolean): Switches {
+	const merged: Switches = {
+		...loadSwitches(path).switches,
+		[provider]: { enabled, updatedAt: new Date().toISOString() },
+	};
+	const temporary = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+	mkdirSync(dirname(path), { recursive: true });
+	try {
+		writeFileSync(
+			temporary,
+			`${JSON.stringify({ version: 1, providers: merged }, null, "\t")}\n`,
+		);
+		renameSync(temporary, path);
+	} catch (error) {
+		rmSync(temporary, { force: true });
+		throw error;
+	}
+	return merged;
+}
+
+/** Providers with a fast strategy; the switch is stored per provider, not per model. */
+function switchKey(ctx: ExtensionContext): string | undefined {
+	const provider = ctx.model?.provider;
+	return provider === CODEX_PROVIDER || provider === GROK_PROVIDER
+		? provider
+		: undefined;
+}
+
+function switchValue(state: State, provider: string): boolean {
+	return state.switches[provider]?.enabled ?? state.config.enabled;
+}
+
+function switchOn(ctx: ExtensionContext, state: State): boolean {
+	const key = switchKey(ctx);
+	return key ? switchValue(state, key) : false;
 }
 
 function headerValue(
@@ -175,7 +244,8 @@ function cloneModel(model: ModelLike): ModelLike {
 	};
 }
 
-function isGrokPair(model: ModelLike | undefined): boolean {
+/** Grok 4.7 is the only catalog model with a fast variant on the Build proxy. */
+function isGrokFastModel(model: ModelLike | undefined): boolean {
 	return (
 		model?.provider === GROK_PROVIDER &&
 		model.api === GROK_API &&
@@ -183,66 +253,57 @@ function isGrokPair(model: ModelLike | undefined): boolean {
 	);
 }
 
-function transportReady(model: ModelLike | undefined): boolean {
+function transportActive(
+	model: ModelLike | undefined,
+	clientVersion: string,
+): boolean {
 	return (
-		model?.id === GROK_FAST_ID &&
+		model?.provider === GROK_PROVIDER &&
 		model.baseUrl === GROK_PROXY_URL &&
 		headerValue(model.headers, "x-grok-model-override") === GROK_FAST_ID &&
-		headerValue(model.headers, "x-xai-token-auth") === "xai-grok-cli"
+		headerValue(model.headers, "x-xai-token-auth") === "xai-grok-cli" &&
+		headerValue(model.headers, "x-grok-client-version") === clientVersion
 	);
 }
 
-function excluded(state: State, id: string): boolean {
-	return state.config.excludeModels.includes(id);
-}
-
-function codexReason(
-	ctx: ExtensionContext,
-	state: State,
-): string | undefined {
-	if (!ctx.model || ctx.model.provider !== "openai-codex") return undefined;
-	if (ctx.model.api !== "openai-codex-responses")
-		return "requires the openai-codex-responses API";
-	if (!ctx.modelRegistry.isUsingOAuth(ctx.model))
-		return "requires ChatGPT OAuth, not API-key auth";
-	if (excluded(state, ctx.model.id)) return "current model is in excludeModels";
-	return undefined;
-}
-
-function grokReason(
-	ctx: ExtensionContext,
-	state: State,
-): string | undefined {
-	if (!isGrokPair(ctx.model as ModelLike | undefined)) return undefined;
-	if (!ctx.modelRegistry.isUsingOAuth(ctx.model!))
-		return "Grok fast requires xAI OAuth, not API-key auth";
-	if (
-		excluded(state, GROK_BASE_ID) ||
-		excluded(state, GROK_FAST_ID) ||
-		excluded(state, ctx.model!.id)
-	) {
-		return "current model is in excludeModels";
+/** Why the current model cannot run Fast, ignoring the config and the switch. */
+function modelReason(ctx: ExtensionContext): string | undefined {
+	const model = ctx.model as ModelLike | undefined;
+	if (!model) return "no model selected";
+	if (model.provider === CODEX_PROVIDER) {
+		if (model.api !== CODEX_API)
+			return "requires the openai-codex-responses API";
+		if (!ctx.modelRegistry.isUsingOAuth(ctx.model!))
+			return "requires ChatGPT OAuth, not API-key auth";
+		return undefined;
 	}
-	return undefined;
+	if (model.provider === GROK_PROVIDER) {
+		if (model.api !== GROK_API || !isGrokFastModel(model))
+			return `only ${GROK_PROVIDER}/${GROK_BASE_ID} has a fast variant on this provider`;
+		if (!ctx.modelRegistry.isUsingOAuth(ctx.model!))
+			return "Grok fast requires xAI OAuth, not API-key auth";
+		return undefined;
+	}
+	return "no fast strategy for this provider";
 }
 
+/** Why the strategy cannot run, independent of the switch. */
 function inactiveReason(
 	ctx: ExtensionContext,
 	state: State,
 ): string | undefined {
-	if (state.warning) return state.warning;
-	if (!ctx.model) return "no model selected";
-	const codex = codexReason(ctx, state);
-	if (ctx.model.provider === "openai-codex") return codex;
-	const grok = grokReason(ctx, state);
-	if (isGrokPair(ctx.model as ModelLike)) return grok;
-	return "no fast strategy for this model";
+	return state.warning ?? modelReason(ctx);
 }
 
 function rememberBase(ctx: ExtensionContext, state: State): void {
 	const model = ctx.model as ModelLike | undefined;
-	if (model?.provider === GROK_PROVIDER && model.id === GROK_BASE_ID)
+	if (
+		model?.provider === GROK_PROVIDER &&
+		model.id === GROK_BASE_ID &&
+		model.baseUrl !== GROK_PROXY_URL
+	) {
 		state.baseSnapshot = cloneModel(model);
+	}
 }
 
 function findBase(ctx: ExtensionContext, state: State): ModelLike | undefined {
@@ -253,73 +314,41 @@ function findBase(ctx: ExtensionContext, state: State): ModelLike | undefined {
 	if (found) return cloneModel(found);
 	if (state.baseSnapshot) return cloneModel(state.baseSnapshot);
 	const current = ctx.model as ModelLike | undefined;
-	if (current?.id !== GROK_FAST_ID) return undefined;
+	if (current?.provider !== GROK_PROVIDER) return undefined;
 	const restored = cloneModel(current);
 	restored.id = GROK_BASE_ID;
 	restored.name = "Grok 4.7";
-	restored.baseUrl = GROK_PUBLIC_URL;
 	restored.headers = undefined;
-	if (current.baseUrl === GROK_PROXY_URL)
+	if (current.baseUrl === GROK_PROXY_URL) {
+		restored.baseUrl = GROK_PUBLIC_URL;
 		restored.cost = scaleCost(current.cost, 1 / GROK_PRICE_MULTIPLIER);
+	}
 	return restored;
 }
 
-function fastModel(base: ModelLike): ModelLike {
+/**
+ * Keeps the catalog identity `xai/grok-4.7` and only swaps the transport, so the
+ * session transcript, model scope and model memory never see the proxy-only id.
+ */
+function fastTransport(base: ModelLike, clientVersion: string): ModelLike {
 	const next = cloneModel(base);
-	next.id = GROK_FAST_ID;
-	next.name = "Grok 4.7 Fast";
+	next.id = GROK_BASE_ID;
 	next.provider = GROK_PROVIDER;
 	next.api = GROK_API;
 	next.baseUrl = GROK_PROXY_URL;
-	next.headers = { ...PROXY_HEADERS };
+	next.headers = proxyHeaders(clientVersion);
 	next.cost = scaleCost(base.cost, GROK_PRICE_MULTIPLIER);
 	return next;
 }
 
-function applyFastTransport(target: ModelLike, base: ModelLike): void {
-	const desired = fastModel(base);
-	target.baseUrl = desired.baseUrl;
-	target.name = desired.name;
-	target.api = desired.api;
-	target.headers = desired.headers;
-	target.cost = desired.cost;
-}
-
-function statusMessage(ctx: ExtensionContext, state: State): string {
+function resultLine(ctx: ExtensionContext, state: State): string {
 	const reason = inactiveReason(ctx, state);
-	const mode = enabled(state) ? "on" : "off";
-	const source =
-		state.override === undefined ? "global config" : "session override";
-	const lines = [`Fast: ${mode} (${source}); ${modelKey(ctx)}`];
-	if (state.deferred)
-		lines.push("Model switch is deferred until the agent is idle");
-	if (reason) lines.push(`No fast action: ${reason}`);
-	else if (!enabled(state))
-		lines.push(
-			"This extension does not add or remove service_tier, and does not keep a Grok fast model selected",
-		);
-	else if (ctx.model?.provider === "openai-codex")
-		lines.push(
-			"Will add priority when service_tier is absent; this may increase quota consumption",
-		);
-	else if (isGrokPair(ctx.model as ModelLike))
-		lines.push(
-			"Will use grok-4.7-build-fast on the Grok Build proxy at 2x catalog rate; this may increase quota consumption",
-		);
-	if (state.lastSwitch) lines.push(`Last model switch: ${state.lastSwitch}`);
-	if (state.lastRequest)
-		lines.push(
-			`Last request handling (${state.lastRequest.modelKey}): ${state.lastRequest.detail}`,
-		);
-	if (ctx.model?.provider === "openai-codex")
-		lines.push(
-			"Effective backend tier: unknown (the current Pi extension API does not expose response-body service_tier)",
-		);
-	else if (isGrokPair(ctx.model as ModelLike))
-		lines.push(
-			"Proxy acceptance: unknown (a model switch is not confirmation that the proxy accepted the token)",
-		);
-	return lines.join("\n");
+	if (reason) return `Fast: unavailable (${reason})`;
+	const line = switchOn(ctx, state) ? "Fast: on" : "Fast: off";
+	if (state.switchFailure) return `${line}, not applied (${state.switchFailure})`;
+	if (state.deferred) return `${line}, applies from the next turn`;
+	if (state.saveFailed) return `${line}, this session only (switch not saved)`;
+	return line;
 }
 
 function updateStatus(ctx: ExtensionContext, state: State): void {
@@ -327,76 +356,58 @@ function updateStatus(ctx: ExtensionContext, state: State): void {
 	const model = ctx.model as ModelLike | undefined;
 	const active =
 		state.config.showStatus &&
-		enabled(state) &&
+		switchOn(ctx, state) &&
 		!inactiveReason(ctx, state) &&
-		(model?.provider === "openai-codex" || transportReady(model));
+		(model?.provider === CODEX_PROVIDER ||
+			transportActive(model, state.config.grokClientVersion));
 	ctx.ui.setStatus(STATUS_KEY, active ? "fast" : undefined);
 }
 
-function requestDetail(
+/** Returns a replacement payload, or undefined to send the request unchanged. */
+function applyRequest(
 	payload: unknown,
 	ctx: ExtensionContext,
 	state: State,
-): { result?: Record<string, unknown>; detail: string } {
-	const reason = inactiveReason(ctx, state);
+): Record<string, unknown> | undefined {
 	const model = ctx.model as ModelLike | undefined;
-	if (!enabled(state) || reason) {
-		if (
-			isRecord(payload) &&
-			payload.model === GROK_FAST_ID &&
-			model?.baseUrl !== GROK_PROXY_URL
-		) {
-			return {
-				result: { ...payload, model: GROK_BASE_ID },
-				detail:
-					"refused to send the fast model id to a non-proxy endpoint; request model reset to grok-4.7",
-			};
-		}
-		return {
-			detail: reason ?? "switch is off; request unchanged",
-		};
+	const onProxy = model?.baseUrl === GROK_PROXY_URL;
+	if (!switchOn(ctx, state) || inactiveReason(ctx, state)) {
+		// The proxy-only id must never reach a public endpoint, switch or not.
+		if (isRecord(payload) && payload.model === GROK_FAST_ID && !onProxy)
+			return { ...payload, model: GROK_BASE_ID };
+		return undefined;
 	}
-	if (model?.provider === "openai-codex") {
-		if (!isRecord(payload) || payload.model !== model.id)
-			return { detail: "invalid payload or model mismatch; request unchanged" };
-		if ("service_tier" in payload)
-			return {
-				detail:
-					"existing service_tier preserved; not overwritten by this extension",
-			};
-		return {
-			result: { ...payload, service_tier: "priority" },
-			detail:
-				"added service_tier=priority (not proof of final transmission or backend confirmation)",
-		};
+	if (model?.provider === CODEX_PROVIDER) {
+		if (!isRecord(payload) || payload.model !== model.id) return undefined;
+		if ("service_tier" in payload) return undefined;
+		return { ...payload, service_tier: "priority" };
 	}
-	if (!isGrokPair(model))
-		return { detail: "no fast strategy for this model" };
-	if (!isRecord(payload))
-		return { detail: "invalid payload; request unchanged" };
-	if (model?.baseUrl !== GROK_PROXY_URL) {
-		if (payload.model === GROK_FAST_ID)
-			return {
-				result: { ...payload, model: GROK_BASE_ID },
-				detail:
-					"refused to send the fast model id to the public xAI API; request model reset to grok-4.7",
-			};
-		return {
-			detail: "Grok fast transport is not active; request unchanged",
-		};
+	if (model?.provider !== GROK_PROVIDER || !isRecord(payload)) return undefined;
+	if (!onProxy)
+		return payload.model === GROK_FAST_ID
+			? { ...payload, model: GROK_BASE_ID }
+			: undefined;
+	return payload.model === GROK_BASE_ID
+		? { ...payload, model: GROK_FAST_ID }
+		: undefined;
+}
+
+async function swapTransport(
+	pi: ExtensionAPI,
+	state: State,
+	model: ModelLike,
+): Promise<void> {
+	state.applying = true;
+	try {
+		const ok = await pi.setModel(model as Parameters<ExtensionAPI["setModel"]>[0]);
+		state.switchFailure = ok
+			? undefined
+			: "setModel returned false; the session transport is unchanged";
+	} catch (error) {
+		state.switchFailure = `setModel failed: ${error instanceof Error ? error.message : String(error)}`;
+	} finally {
+		state.applying = false;
 	}
-	if (payload.model === GROK_BASE_ID)
-		return {
-			result: { ...payload, model: GROK_FAST_ID },
-			detail:
-				"rewrote model id to grok-4.7-build-fast on the proxy request (not proof the proxy accepted it)",
-		};
-	if (payload.model === GROK_FAST_ID)
-		return {
-			detail:
-				"fast model id already set (not proof the proxy accepted the request)",
-		};
-	return { detail: "invalid payload or model mismatch; request unchanged" };
 }
 
 async function reconcile(
@@ -406,59 +417,34 @@ async function reconcile(
 ): Promise<void> {
 	if (state.applying) return;
 	rememberBase(ctx, state);
+	state.switchFailure = undefined;
 	const model = ctx.model as ModelLike | undefined;
-	const shouldUseFast = enabled(state) && !inactiveReason(ctx, state);
-	if (!isGrokPair(model)) return;
+	if (model?.provider !== GROK_PROVIDER || !isGrokFastModel(model)) return;
+	const version = state.config.grokClientVersion;
+	const shouldUseFast = switchOn(ctx, state) && !inactiveReason(ctx, state);
+	const applied = transportActive(model, version) && model.id === GROK_BASE_ID;
+	const clean = !transportActive(model, version) && model.id === GROK_BASE_ID;
 
-	if (!shouldUseFast) {
-		if (model?.id !== GROK_FAST_ID) return;
+	if (shouldUseFast) {
+		if (applied) return;
 		const base = findBase(ctx, state);
 		if (!base) {
-			state.lastSwitch =
-				"could not restore grok-4.7; fast model remains selected";
+			state.switchFailure =
+				"could not resolve xai/grok-4.7 to apply the fast transport";
 			return;
 		}
-		state.applying = true;
-		try {
-			const ok = await pi.setModel(base);
-			state.lastSwitch = ok
-				? "restored session model to xai/grok-4.7"
-				: "setModel returned false; fast model remains selected";
-		} catch (error) {
-			state.lastSwitch = `setModel failed: ${error instanceof Error ? error.message : String(error)}`;
-		} finally {
-			state.applying = false;
-		}
+		await swapTransport(pi, state, fastTransport(base, version));
 		return;
 	}
 
-	const base = findBase(ctx, state) ?? (model?.id === GROK_BASE_ID ? model : undefined);
+	if (clean) return;
+	const base = findBase(ctx, state);
 	if (!base) {
-		state.lastSwitch = "could not find xai/grok-4.7 to build the fast model";
+		state.switchFailure =
+			"could not resolve xai/grok-4.7; the proxy transport is still selected";
 		return;
 	}
-	if (model?.id === GROK_FAST_ID) {
-		if (transportReady(model)) return;
-		applyFastTransport(model, base);
-		state.lastSwitch =
-			"corrected the selected fast model onto the Grok Build proxy without another session model change";
-		return;
-	}
-	state.applying = true;
-	try {
-		const ok = await pi.setModel(fastModel(base));
-		state.lastSwitch = ok
-			? "switched session model to xai/grok-4.7-build-fast on the Grok Build proxy (not proof the proxy accepted the token)"
-			: "setModel returned false; session model unchanged";
-	} catch (error) {
-		state.lastSwitch = `setModel failed: ${error instanceof Error ? error.message : String(error)}`;
-	} finally {
-		state.applying = false;
-	}
-}
-
-function proxySelected(model: ModelLike | undefined): boolean {
-	return model?.id === GROK_FAST_ID && model.baseUrl === GROK_PROXY_URL;
+	await swapTransport(pi, state, base);
 }
 
 function applyProxyHeaders(
@@ -467,34 +453,74 @@ function applyProxyHeaders(
 	state: State,
 ): void {
 	const model = ctx.model as ModelLike | undefined;
-	if (!enabled(state) || inactiveReason(ctx, state) || !proxySelected(model))
+	if (
+		!switchOn(ctx, state) ||
+		inactiveReason(ctx, state) ||
+		model?.baseUrl !== GROK_PROXY_URL
+	) {
 		return;
-	for (const [name, value] of Object.entries(PROXY_HEADERS))
+	}
+	for (const [name, value] of Object.entries(
+		proxyHeaders(state.config.grokClientVersion),
+	)) {
 		setHeader(headers, name, value);
+	}
 }
 
-/** No credential reads, extra network calls, retries, or usage patches. */
-export function registerFast(pi: ExtensionAPI, configPath: string): void {
+/**
+ * No credential reads, extra network calls, retries, or usage patches. Proxy requests
+ * do claim a Grok CLI build, which is what the Grok Build proxy gates on.
+ */
+export function registerFast(
+	pi: ExtensionAPI,
+	configPath: string,
+	statePath: string,
+): void {
 	const states = new WeakMap<object, State>();
+
+	function freshState(): State {
+		return {
+			...loadConfig(configPath),
+			...loadSwitches(statePath),
+			applying: false,
+			deferred: false,
+			saveFailed: false,
+		};
+	}
+
+	/** Persists the switch, falling back to a session-only value when the write fails. */
+	function writeSwitch(state: State, provider: string, enabled: boolean): void {
+		try {
+			state.switches = saveSwitch(statePath, provider, enabled);
+			state.saveFailed = false;
+		} catch {
+			state.switches = {
+				...state.switches,
+				[provider]: { enabled, updatedAt: new Date().toISOString() },
+			};
+			state.saveFailed = true;
+		}
+	}
+
 	function getState(ctx: ExtensionContext): State {
 		let state = states.get(ctx.sessionManager);
 		if (!state) {
-			state = { ...loadConfig(configPath), applying: false, deferred: false };
+			state = freshState();
 			states.set(ctx.sessionManager, state);
 		}
 		return state;
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
-		const state: State = {
-			...loadConfig(configPath),
-			applying: false,
-			deferred: false,
-		};
+		const state = freshState();
 		states.set(ctx.sessionManager, state);
-		if (state.warning) {
-			if (ctx.hasUI) ctx.ui.notify(state.warning, "warning");
-			else console.error(state.warning);
+		for (const message of [
+			state.warning && `Fast: unavailable (${state.warning})`,
+			state.stateWarning,
+		]) {
+			if (!message) continue;
+			if (ctx.hasUI) ctx.ui.notify(message, "warning");
+			else console.error(message);
 		}
 		await reconcile(pi, ctx, state);
 		updateStatus(ctx, state);
@@ -502,8 +528,6 @@ export function registerFast(pi: ExtensionAPI, configPath: string): void {
 	pi.on("model_select", async (_event, ctx) => {
 		const state = getState(ctx);
 		if (state.applying) return;
-		state.lastRequest = undefined;
-		state.lastSwitch = undefined;
 		await reconcile(pi, ctx, state);
 		updateStatus(ctx, state);
 	});
@@ -523,15 +547,14 @@ export function registerFast(pi: ExtensionAPI, configPath: string): void {
 	});
 	pi.on("before_provider_request", (event, ctx) => {
 		const state = getState(ctx);
-		const handled = requestDetail(event.payload, ctx, state);
-		state.lastRequest = { modelKey: modelKey(ctx), detail: handled.detail };
+		const result = applyRequest(event.payload, ctx, state);
 		updateStatus(ctx, state);
-		return handled.result;
+		return result;
 	});
 
 	pi.registerCommand("fast", {
 		description:
-			"Toggle Fast: /fast [on|off|status]. Codex adds service_tier; Grok 4.7 switches to the proxy fast model",
+			"Toggle Fast for the current model: /fast [on|off|status]. Codex adds service_tier; only Grok 4.7 uses the Build proxy",
 		getArgumentCompletions: (prefix) =>
 			["on", "off", "status"]
 				.filter((value) => value.startsWith(prefix))
@@ -543,22 +566,31 @@ export function registerFast(pi: ExtensionAPI, configPath: string): void {
 				return;
 			}
 			const state = getState(ctx);
+			const key = switchKey(ctx);
+			if (inactiveReason(ctx, state) || !key) {
+				// A saved "on" this model cannot honor is stale, so drop it instead of
+				// leaving the switch claiming a mode that never runs.
+				if (key && !state.warning && state.switches[key]?.enabled)
+					writeSwitch(state, key, false);
+				updateStatus(ctx, state);
+				ctx.ui.notify(resultLine(ctx, state), "warning");
+				return;
+			}
 			if (action !== "status") {
-				state.override = action === "" ? !enabled(state) : action === "on";
-				state.lastRequest = undefined;
-				state.lastSwitch = undefined;
-				const idle = typeof ctx.isIdle === "function" ? ctx.isIdle() : true;
-				if (!idle) {
-					state.deferred = true;
-					updateStatus(ctx, state);
-					ctx.ui.notify(statusMessage(ctx, state), "info");
-					return;
-				}
-				state.deferred = false;
-				await reconcile(pi, ctx, state);
+				writeSwitch(
+					state,
+					key,
+					action === "" ? !switchValue(state, key) : action === "on",
+				);
+				state.deferred =
+					typeof ctx.isIdle === "function" ? !ctx.isIdle() : false;
+				if (!state.deferred) await reconcile(pi, ctx, state);
 			}
 			updateStatus(ctx, state);
-			ctx.ui.notify(statusMessage(ctx, state), state.warning ? "warning" : "info");
+			ctx.ui.notify(
+				resultLine(ctx, state),
+				state.saveFailed || state.switchFailure ? "warning" : "info",
+			);
 		},
 	});
 }

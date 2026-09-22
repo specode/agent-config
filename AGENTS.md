@@ -71,10 +71,14 @@ harnesses/pi/
 
 - 整个目录应可单独取出安装与测试，不依赖父仓库安装器、兄弟目录或个人配置。
 - 通过 Pi 标准扩展 API 和运行时配置目录工作，不硬编码用户目录或账号。Codex 不按模型 ID 白名单过滤；Grok Fast 只包含已核实的 `xai/grok-4.7` → `grok-4.7-build-fast` 替换，不预置其他供应商映射。
+- 开关按 provider 记忆，立即写入运行时状态文件（`state/fast.json`），写前重新读取并合并，只覆盖本次改动的 provider。扩展不回写安装器托管的配置文件；配置只提供还没设过开关时的默认值。没有 Fast 策略的 provider 拒绝切换且不写状态。
+- 切换前先判断当前模型是否适用，不适用则拒绝切换并直接报失败；该 provider 已保存的"开启"在此时改写为关闭，避免状态声称开着却从不生效。配置无效不算陈旧状态，不改写已保存开关。
+- 命令输出只有一行结论（`Fast: on`／`Fast: off`／`Fast: unavailable (原因)`），不常驻免责声明或历史记录；仅在切换没有落地时追加简短说明。
 - 扩展缺省关闭；仓库个人配置可开启，但不得改变独立使用契约。配置、认证判断和请求策略归扩展自身负责。
 - Codex 仅处理 OAuth 适用请求；保留已有 `service_tier`，不读取凭据文件，不新增网络请求、隐式重试、降级或费用估算。
-- Grok 4.7 Fast 不在公开 xAI API 上。开关开启且当前模型为 `xai/grok-4.7` 的 OAuth 会话时，用 `setModel` 切到 Grok Build 代理上的 `grok-4.7-build-fast`；不把 fast 模型名发到公开 API，不伪装 Grok 客户端标识，不把 API key 送到代理。
-- 区分允许尝试与后端实际接受，不根据速度、成功状态码或费用推测最终结果。
+- Grok 4.7 Fast 不在公开 xAI API 上。开关开启且当前模型为 `xai/grok-4.7` 的 OAuth 会话时，用 `setModel` 传入 provider 与 id 完全不变的副本，只覆盖 `baseUrl`、代理头和估价，并在 payload 里改模型名；目录外的模型 id 不得进入会话记录、模型范围或模型记忆，旧会话里残留的 fast id 要换回 `xai/grok-4.7`。
+- 代理按 Grok CLI 的客户端标识和版本放行，因此代理请求声明客户端标识与版本，版本可配置以应对版本下限上移。不把 fast 模型名发到公开 API，不把 API key 送到代理。
+- 区分允许尝试与后端实际接受，不根据速度、成功状态码或费用推测最终结果；`Fast: on` 只表示本地处理已生效。
 - 通过标准 `ctx.ui.setStatus()` 的 `fast` 键发布 `fast` 或清除状态。自定义 footer 从 `footerData.getExtensionStatuses()` 读取；位置、颜色与布局归 UI 扩展，禁止反向依赖 session-ui。
 
 ## 4. 修改与文档规范
