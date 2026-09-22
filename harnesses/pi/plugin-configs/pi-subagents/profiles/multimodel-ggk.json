@@ -28,12 +28,6 @@
 				"thinking": "max",
 				"acceptanceRole": "read-only"
 			},
-			"claude-code": {
-				"disabled": true
-			},
-			"claude-code-writer": {
-				"disabled": true
-			},
 			"codex-exec": {
 				"disabled": true
 			},

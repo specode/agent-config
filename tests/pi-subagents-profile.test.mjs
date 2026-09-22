@@ -20,21 +20,20 @@ const routing = {
 	reviewer: ["xai/grok-4.7", "xhigh"],
 	oracle: ["openai-codex/gpt-6-astra", "max"],
 };
-const externalAgents = [
-	"claude-code",
-	"claude-code-writer",
+const disabledExternalAgents = [
 	"codex-exec",
 	"codex-exec-writer",
 	"cursor-agent",
 	"cursor-agent-writer",
 ];
+const unmanagedExternalAgents = ["claude-code", "claude-code-writer"];
 
 test("multimodel profile uses one model per role without overriding builtin prompts or tools", () => {
 	assert.deepEqual(Object.keys(profile), ["subagents"]);
 	assert.deepEqual(Object.keys(profile.subagents), ["agentOverrides"]);
 	assert.deepEqual(
 		Object.keys(overrides).sort(),
-		[...Object.keys(routing), ...externalAgents].sort(),
+		[...Object.keys(routing), ...disabledExternalAgents].sort(),
 	);
 	for (const [name, [model, thinking]] of Object.entries(routing)) {
 		const override = overrides[name];
@@ -57,8 +56,14 @@ test("review is fresh and read-only while worker and oracle keep builtin context
 	assert.equal(Object.hasOwn(overrides.oracle, "defaultContext"), false);
 });
 
-test("all external CLI variants remain disabled", () => {
-	for (const name of externalAgents) {
+test("codex and cursor CLI variants remain disabled", () => {
+	for (const name of disabledExternalAgents) {
 		assert.deepEqual(overrides[name], { disabled: true }, name);
+	}
+});
+
+test("claude-code variants keep builtin availability", () => {
+	for (const name of unmanagedExternalAgents) {
+		assert.equal(Object.hasOwn(overrides, name), false, name);
 	}
 });
