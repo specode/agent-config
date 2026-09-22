@@ -15,7 +15,7 @@
 	"steeringMode": "all",
 	"followUpMode": "all",
 	"compaction": {
-		"keepRecentTokens": 40000
+		"keepRecentTokens": 80000
 	},
 	"packages": [
 		"npm:pi-subagents",
