@@ -348,10 +348,11 @@ export function registerUiMeta(
 		));
 		requestMarker = buildRequestMarker(!startReceived, !recapReceived);
 		titleController.setWorking(true);
-		return { systemPrompt: `${event.systemPrompt}\n\n${protocolPrompt}` };
+		// Let Pi persist a section patch instead of forcing a new prompt head.
+		event.systemPromptOptions.sections.session_ui_meta = protocolPrompt;
 	});
 
-	pi.on("context", (event) => {
+	pi.on("context_with_system", (event) => {
 		if (!enabledForSession || !requestActive || !requestMarker) return;
 		const messages = appendRequestToLatestUserMessage(
 			event.messages,
