@@ -292,8 +292,10 @@ pi)
 			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
 			'-|.pi/agent/extensions/session-ui.ts|absent|-|插件|session-ui 旧入口' \
 			"$PI_SESSION_UI_SOURCE|.pi/agent/extensions/session-ui|directory|-|插件|session-ui" \
-			'harnesses/pi/builtins/openai-fast|.pi/agent/extensions/openai-fast|directory|-|插件|OpenAI Fast' \
-			'harnesses/pi/plugin-configs/openai-fast/config.json|.pi/agent/extensions/openai-fast.json|file|-|配置|OpenAI Fast' \
+			'-|.pi/agent/extensions/openai-fast|absent|-|插件|OpenAI Fast 旧入口' \
+			'-|.pi/agent/extensions/openai-fast.json|absent|-|配置|OpenAI Fast 旧配置' \
+			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|插件|Fast' \
+			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
 			'harnesses/pi/plugin-configs/pi-subagents/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
 			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
 			'harnesses/pi/plugin-configs/sol-pi/config.json|.pi/agent/sol-pi.json|file|-|配置|SoL-Pi' \

@@ -37,7 +37,7 @@ assert.equal(process.env.PI_OFFLINE, "1");
 assert.equal(process.env.npm_config_ignore_scripts, "true");
 assert.deepEqual(process.argv.slice(2), ["remove", ${JSON.stringify(SOURCE)}, "--no-approve"]);
 assert.equal(fs.realpathSync(process.cwd()), fs.realpathSync(path.dirname(path.dirname(agent))));
-assert.ok(fs.existsSync(path.join(agent, "extensions/openai-fast/index.ts")), "new plugin must be installed first");
+assert.ok(fs.existsSync(path.join(agent, "extensions/fast/index.ts")), "new plugin must be installed first");
 const settings = JSON.parse(fs.readFileSync(path.join(agent, "settings.json")));
 assert.equal(settings.packages.includes(${JSON.stringify(SOURCE)}), false);
 fs.appendFileSync(process.env.PI_TEST_CALL_LOG, JSON.stringify({ agent, args: process.argv.slice(2) }) + "\\n");
@@ -140,9 +140,9 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"config/keybindings.json": ".pi/agent/keybindings.json",
 		"builtins/session-ui/index.ts": ".pi/agent/extensions/session-ui/index.ts",
 		"builtins/session-ui/config.ts": ".pi/agent/extensions/session-ui/config.ts",
-		"builtins/openai-fast/index.ts": ".pi/agent/extensions/openai-fast/index.ts",
+		"builtins/fast/index.ts": ".pi/agent/extensions/fast/index.ts",
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
-		"plugin-configs/openai-fast/config.json": ".pi/agent/extensions/openai-fast.json",
+		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
 		"plugin-configs/pi-subagents/config.json": ".pi/agent/extensions/subagent/config.json",
 		"plugin-configs/pi-subagents/profiles/multimodel-ggk.json": ".pi/agent/profiles/pi-subagents/multimodel-ggk.json",
 		"plugin-configs/pi-lens/config.json": ".pi-lens/config.json",
@@ -212,9 +212,11 @@ test("replaces managed plugin directories only after consent and backs up obsole
 		"extensions/session-ui/obsolete.ts": "old session-ui module\n",
 		"extensions/session-ui/AGENTS.md": "old local rules\n",
 		"extensions/openai-fast/obsolete.ts": "old fast module\n",
+		"extensions/fast/obsolete.ts": "old fast module\n",
 	};
 	const configPath = join(f.agentDir, "extensions/session-ui/config.json");
 	const oldConfig = '{"workAnimation":{"enabled":false}}\n';
+	mkdirSync(join(f.agentDir, "extensions/openai-fast"), { recursive: true });
 	for (const [path, text] of Object.entries(oldFiles)) writeFileSync(join(f.agentDir, path), text);
 	writeFileSync(configPath, oldConfig);
 	writeFileSync(join(f.agentDir, "extensions/unrelated.ts"), "unrelated plugin\n");
@@ -296,7 +298,7 @@ test("fresh and repeat installs deploy SoL-Pi without invoking package removal",
 		cacheWriteReadRatio: 12.5,
 	});
 	assertSuccess(install(f));
-	assert.ok(existsSync(join(f.agentDir, "extensions/openai-fast/index.ts")));
+	assert.ok(existsSync(join(f.agentDir, "extensions/fast/index.ts")));
 	assert.equal(readFileSync(join(f.agentDir, "sol-pi.json"), "utf8"), source);
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
 	assert.ok(settings.packages.includes("git:github.com/NVlabs/SoL-Pi"));
@@ -428,7 +430,7 @@ test("installs replacement before uninstalling the exact old package and preserv
 	);
 	assert.ok(existsSync(join(backup, "package-lock.json")));
 	assert.equal(
-		JSON.parse(readFileSync(join(f.agentDir, "extensions/openai-fast.json")))
+		JSON.parse(readFileSync(join(f.agentDir, "extensions/fast.json")))
 			.enabled,
 		true,
 	);
@@ -458,8 +460,15 @@ test("declining installation leaves the old plugin and manifests untouched", (t)
 		readFileSync(join(f.agentDir, "npm/package.json"), "utf8"),
 		manifest,
 	);
+	mkdirSync(join(f.agentDir, "extensions/openai-fast"), { recursive: true });
+	writeFileSync(join(f.agentDir, "extensions/openai-fast/index.ts"), "old fast entry\n");
+	assertSuccess(install(f, { input: "n\n" }));
 	assert.equal(
-		existsSync(join(f.agentDir, "extensions/openai-fast/index.ts")),
+		readFileSync(join(f.agentDir, "extensions/openai-fast/index.ts"), "utf8"),
+		"old fast entry\n",
+	);
+	assert.equal(
+		existsSync(join(f.agentDir, "extensions/fast/index.ts")),
 		false,
 	);
 });
@@ -502,7 +511,7 @@ test("cleanup failure is reported, keeps the new files and backup, and permits a
 	assert.notEqual(result.status, 0, result.stdout + result.stderr);
 	assert.match(result.stderr, /卸载失败/);
 	assert.ok(existsSync(f.packageDir));
-	assert.ok(existsSync(join(f.agentDir, "extensions/openai-fast/index.ts")));
+	assert.ok(existsSync(join(f.agentDir, "extensions/fast/index.ts")));
 	assert.ok(cleanupBackup(f));
 	assertSuccess(install(f));
 	assert.equal(calls(f).length, 2);

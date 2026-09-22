@@ -83,7 +83,7 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		extensionStatuses: {
 			exclude: [
 				"pi-lens-lsp",
-				"openai-fast",
+				"fast",
 				"mcp",
 				"mcp-*",
 				"subscription-usage",

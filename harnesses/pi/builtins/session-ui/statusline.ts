@@ -207,7 +207,7 @@ function registerBuiltInSegments(
 			const full = formatEffortWithFast(
 				theme,
 				pi.getThinkingLevel(),
-				footerData.getExtensionStatuses().get("openai-fast"),
+				footerData.getExtensionStatuses().get("fast"),
 			);
 			return full ? { full } : undefined;
 		},

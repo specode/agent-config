@@ -127,6 +127,6 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 相邻的模型与思考档位、目录与分支用空格连接，其余状态段使用 Powerline 分隔符。空间不足时按 `overflow` 配置隐藏内容；未知 ID 会提示并跳过。
 
-`fast` 由 OpenAI Fast 控制，详情用 `/fast status` 查询。它只是启用标记，不代表后端已确认加速，详见 [OpenAI Fast 使用说明](../openai-fast/README.md)。
+`fast` 由 Fast 控制，详情用 `/fast status` 查询。它只是启用标记，不代表后端已确认加速，详见 [Fast 使用说明](../fast/README.md)。
 
 `usage` 跟随订阅插件当前的百分比显示模式，颜色按剩余额度告警；它不是本会话账单。`tokens` 和 `cost` 汇总会话中已记录的用量（包括后台预热等），缓存命中率仅统计 assistant 请求、不计后台预热。`cost` 直接取 Pi 记录的费用，而 Pi 按模型内置价目表估算，订阅计费下同样累计，因此它是资源消耗估算而非实际账单；显示 `$0.000` 也不代表服务免费或订阅额度未消耗。

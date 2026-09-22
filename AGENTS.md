@@ -17,14 +17,14 @@ Pi 源目录按职责组织，不镜像运行目录：
 ```text
 harnesses/pi/
 ├── builtins/                  # 内置插件：一个插件一个目录
-│   ├── openai-fast/
+│   ├── fast/
 │   │   ├── index.ts           # 插件入口
 │   │   └── ...                # 实现、测试、用户说明
 │   └── session-ui/
 │       ├── index.ts
 │       └── ...
 ├── plugin-configs/            # 插件配置：一个插件一个目录
-│   ├── openai-fast/config.json
+│   ├── fast/config.json
 │   ├── session-ui/config.json
 │   └── ...                    # 其他插件配置及 Profile
 └── config/                    # Pi 自身的 settings.json、keybindings.json
@@ -62,19 +62,20 @@ harnesses/pi/
 - 图片粘贴增强只改展示，保留 Pi 原生注册表、文本粘贴和提交展开行为；异步读取图片并使用有界缓存。依赖内部编辑器结构时使用运行时守卫，失配则警告并退回原生行为。
 - 用量汇总只读会话条目，按原生 footer 口径累计带用量的记录，使用记录费用而非自行定价；不写会话、不触发预热、不读凭据、不请求账单服务、不依赖 Pi 私有模块。私有模块只允许用于测试对照。
 - Cache 命中率是 assistant 请求的派生展示，不计后台预热；订阅额度来自 `subscription-usage/status/v1`，与会话账单独立。
-- Fast 资格与开关归 OpenAI Fast；界面只消费 `openai-fast` 状态。自定义 segment 通过 `session-ui/statusline/register/v1` 注册，且须由配置显式选中。
+- Fast 资格与开关归 Fast 扩展；界面只消费 `fast` 状态。自定义 segment 通过 `session-ui/statusline/register/v1` 注册，且须由配置显式选中。
 - UI Meta 复用主模型正常响应，不额外调用模型；仅在交互式 TUI 注入协议。隐藏记录须在流式展示和持久化前清理，Recap 不进入模型上下文；过滤控制字符并限制长度，忽略无效、过期或失败响应。
 - 手工命名锁只约束自动 session 名称，不阻止任务标题更新。协议字段和解析行为以实现及测试为准，不在文档维护第二份协议样例。
 - 修改适配须同时检查生产者、转换、渲染和跨 session 生命周期。保留可测试、可替换的边界，实际公开发布时再评估泛化与兼容承诺。
 
-### OpenAI Fast：独立公共扩展
+### Fast：独立公共扩展
 
 - 整个目录应可单独取出安装与测试，不依赖父仓库安装器、兄弟目录或个人配置。
-- 通过 Pi 标准扩展 API 和运行时配置目录工作，不硬编码用户目录、账号或模型白名单。
+- 通过 Pi 标准扩展 API 和运行时配置目录工作，不硬编码用户目录或账号。Codex 不按模型 ID 白名单过滤；Grok Fast 只包含已核实的 `xai/grok-4.7` → `grok-4.7-build-fast` 替换，不预置其他供应商映射。
 - 扩展缺省关闭；仓库个人配置可开启，但不得改变独立使用契约。配置、认证判断和请求策略归扩展自身负责。
-- 仅处理 Codex OAuth 适用请求；保留已有 `service_tier`，不读取凭据文件，不新增网络请求、隐式重试、降级或费用估算。
-- 区分允许尝试 priority 与后端实际支持，不根据速度、成功状态码或费用推测最终 tier。
-- 通过标准 `ctx.ui.setStatus()` 的 `openai-fast` 键发布 `fast` 或清除状态。自定义 footer 从 `footerData.getExtensionStatuses()` 读取；位置、颜色与布局归 UI 扩展，禁止反向依赖 session-ui。
+- Codex 仅处理 OAuth 适用请求；保留已有 `service_tier`，不读取凭据文件，不新增网络请求、隐式重试、降级或费用估算。
+- Grok 4.7 Fast 不在公开 xAI API 上。开关开启且当前模型为 `xai/grok-4.7` 的 OAuth 会话时，用 `setModel` 切到 Grok Build 代理上的 `grok-4.7-build-fast`；不把 fast 模型名发到公开 API，不伪装 Grok 客户端标识，不把 API key 送到代理。
+- 区分允许尝试与后端实际接受，不根据速度、成功状态码或费用推测最终结果。
+- 通过标准 `ctx.ui.setStatus()` 的 `fast` 键发布 `fast` 或清除状态。自定义 footer 从 `footerData.getExtensionStatuses()` 读取；位置、颜色与布局归 UI 扩展，禁止反向依赖 session-ui。
 
 ## 4. 修改与文档规范
 
@@ -95,13 +96,13 @@ node --test tests/*.test.mjs
 
 # 扩展单元测试：不需要账号或网络
 node --test harnesses/pi/builtins/session-ui/*.test.ts
-node --test harnesses/pi/builtins/openai-fast/*.test.ts
+node --test harnesses/pi/builtins/fast/*.test.ts
 
 # 安装版 Pi 集成对照：路径按本机实际安装位置填写；未设置时跳过
 PI_PACKAGE_ROOT=/absolute/path/to/pi-coding-agent \
   node --test harnesses/pi/builtins/session-ui/*.integration.test.mjs
 ```
 
-OpenAI Fast 也应支持在其目录独立运行 `node --test ./openai-fast.test.ts`。直接从仓库加载 session-ui 时使用 `harnesses/pi/builtins/session-ui/index.ts`；如需使用仓库配置，通过 `PI_SESSION_UI_CONFIG` 指向 `harnesses/pi/plugin-configs/session-ui/config.json` 的绝对路径；安装后仍读取插件目录内的 `config.json`。
+Fast 也应支持在其目录独立运行 `node --test ./fast.test.ts`。直接从仓库加载 session-ui 时使用 `harnesses/pi/builtins/session-ui/index.ts`；如需使用仓库配置，通过 `PI_SESSION_UI_CONFIG` 指向 `harnesses/pi/plugin-configs/session-ui/config.json` 的绝对路径；安装后仍读取插件目录内的 `config.json`。
 
-改动后按风险选择验证。图片 Overlay、真实 TUI 布局、动画与标题、并发工具、交互命令、自动／手工命名和跨 session 生命周期仍需真实终端验证；本地模拟不能证明模型遵循协议或后端支持 priority。真实模型验证可能消耗额度，须单独授权；如实说明跳过和未验证项。
+改动后按风险选择验证。图片 Overlay、真实 TUI 布局、动画与标题、并发工具、交互命令、自动／手工命名和跨 session 生命周期仍需真实终端验证；本地模拟不能证明模型遵循协议、后端支持 priority，或 Grok Build 代理接受 Pi 的 xAI OAuth。真实模型验证可能消耗额度，须单独授权；如实说明跳过和未验证项。
