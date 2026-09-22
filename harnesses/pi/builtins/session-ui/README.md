@@ -50,7 +50,7 @@ Recap 描述**同一个连续任务截至当前的整体进展**，结合相关�
 
 ## 配置
 
-安装后的配置位于 `~/.pi/agent/extensions/session-ui/config.json`。[仓库配置](../../plugin-configs/session-ui/config.json) 不覆盖任何字段，默认值以下表为准；需要个人偏好时在其中只写要改的项。也可在启动前指定绝对路径：
+安装后的配置位于 `~/.pi/agent/extensions/session-ui/config.json`。[仓库配置](../../plugin-configs/session-ui/config.json) 只覆盖 `statusline.segments`（去掉 `tokens`），其余字段的默认值以下表为准；需要个人偏好时在其中只写要改的项。`segments` 整组替换，不与默认值合并。也可在启动前指定绝对路径：
 
 ```bash
 PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
@@ -108,9 +108,9 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `branch` | Git 分支 |
 | `context` | 上下文使用率和窗口大小 |
 | `usage` | 订阅窗口额度百分比，按 5h／1w／1m 排列；需要订阅用量插件 |
-| `tokens` | 当前会话累计输入／输出 token |
+| `tokens` | 当前会话累计输入／输出 token，仓库配置已关闭 |
 | `cache` | 当前、最近五次 assistant 请求及会话的缓存命中率 |
-| `cost` | 当前会话已记录的费用；没有费用记录时显示 `$0.000` |
+| `cost` | 当前会话已记录的费用估算；没有费用记录时显示 `$0.000` |
 | `mcp` | MCP 已连接／已启用数量及可用服务名称 |
 | `extensions` | 未被排除的其他扩展状态 |
 
@@ -129,4 +129,4 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 `fast` 由 OpenAI Fast 控制，详情用 `/fast status` 查询。它只是启用标记，不代表后端已确认加速，详见 [OpenAI Fast 使用说明](../openai-fast/README.md)。
 
-`usage` 跟随订阅插件当前的百分比显示模式，颜色按剩余额度告警；它不是本会话账单。`tokens` 和 `cost` 汇总会话中已记录的用量（包括后台预热等），缓存命中率仅统计 assistant 请求、不计后台预热。显示 `$0.000` 不代表服务免费或订阅额度未消耗。
+`usage` 跟随订阅插件当前的百分比显示模式，颜色按剩余额度告警；它不是本会话账单。`tokens` 和 `cost` 汇总会话中已记录的用量（包括后台预热等），缓存命中率仅统计 assistant 请求、不计后台预热。`cost` 直接取 Pi 记录的费用，而 Pi 按模型内置价目表估算，订阅计费下同样累计，因此它是资源消耗估算而非实际账单；显示 `$0.000` 也不代表服务免费或订阅额度未消耗。

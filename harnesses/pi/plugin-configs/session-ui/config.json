@@ -1,1 +1,16 @@
-{}
+{
+	"statusline": {
+		"segments": [
+			"model",
+			"effort",
+			"directory",
+			"branch",
+			"context",
+			"usage",
+			"cache",
+			"cost",
+			"mcp",
+			"extensions"
+		]
+	}
+}
