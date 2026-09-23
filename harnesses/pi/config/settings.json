@@ -2,9 +2,9 @@
 	"theme": "light/dark",
 	"enabledModels": [
 		"openai-codex/gpt-6-astra",
-		"openai-codex/gpt-5.6-sol",
-		"kimi-coding/k3",
+		"openai-codex/gpt-6-sol",
 		"xai/grok-4.7",
+		"kimi-coding/k3",
 		"antigravity/gemini-3.8-flash",
 		"antigravity/claude-opus-4-6"
 	],
