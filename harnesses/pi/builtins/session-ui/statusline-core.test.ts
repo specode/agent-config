@@ -198,6 +198,7 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 				displayPercent: 20,
 				windowMinutes: 300,
 				resetsAt: 1_800_000_000,
+				resetCountdown: "2h13m",
 			},
 		],
 	});
@@ -211,6 +212,8 @@ test("subscription usage event is decoded and sorted by canonical window", () =>
 		[20, 30, 40],
 	);
 	assert.equal(view?.windows[0]?.resetsAt, 1_800_000_000);
+	assert.equal(view?.windows[0]?.resetCountdown, "2h13m");
+	assert.equal(view?.windows[1]?.resetCountdown, undefined);
 	assert.equal(
 		parseSubscriptionUsageEvent({ v: 1, status: "unavailable" }),
 		undefined,
@@ -234,4 +237,41 @@ test("legacy subscription usage events default to remaining display", () => {
 	assert.equal(view?.displayMode, "remaining");
 	assert.equal(view?.windows[0]?.usedPercent, 20);
 	assert.equal(view?.windows[0]?.displayPercent, 80);
+});
+
+test("malformed reset countdowns are dropped without hiding the window", () => {
+	const view = parseSubscriptionUsageEvent({
+		v: 1,
+		status: "ready",
+		providerId: "openai-codex",
+		capturedAt: 123,
+		windows: [
+			{
+				kind: "hourly",
+				label: "5h",
+				remainingPercent: 80,
+				resetCountdown: "\u001B[31m\u001B[0m",
+			},
+			{
+				kind: "weekly",
+				label: "1w",
+				remainingPercent: 70,
+				resetCountdown: "x".repeat(17),
+			},
+			{
+				kind: "monthly",
+				label: "1m",
+				remainingPercent: 60,
+				resetCountdown: 42,
+			},
+		],
+	});
+	assert.deepEqual(
+		view?.windows.map((window) => [window.label, window.resetCountdown]),
+		[
+			["5h", undefined],
+			["1w", undefined],
+			["1m", undefined],
+		],
+	);
 });

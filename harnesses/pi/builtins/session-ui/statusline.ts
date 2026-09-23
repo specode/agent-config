@@ -290,7 +290,10 @@ function registerBuiltInSegments(
 						remainingUsageColor(window.remainingPercent),
 						theme.bold(`${Math.round(window.displayPercent)}%`),
 					);
-					return `${icon} ${window.label} ${percent}`;
+					const reset = window.resetCountdown
+						? ` ${theme.fg("dim", `\u21BB${window.resetCountdown}`)}`
+						: "";
+					return `${icon} ${window.label} ${percent}${reset}`;
 				})
 				.join("  ");
 			return value ? { full: value } : undefined;

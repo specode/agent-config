@@ -33,6 +33,7 @@ export interface SubscriptionUsageWindowView {
 	displayPercent: number;
 	windowMinutes?: number;
 	resetsAt?: number;
+	resetCountdown?: string;
 }
 
 export interface SubscriptionUsageView {
@@ -283,6 +284,7 @@ export function parseSubscriptionUsageEvent(
 				displayPercent?: unknown;
 				windowMinutes?: unknown;
 				resetsAt?: unknown;
+				resetCountdown?: unknown;
 			};
 			if (
 				!isSubscriptionUsageWindowKind(candidate.kind) ||
@@ -313,6 +315,11 @@ export function parseSubscriptionUsageEvent(
 			) {
 				return [];
 			}
+			// The countdown is display-only; a malformed value drops the field, not the window.
+			const resetCountdown =
+				typeof candidate.resetCountdown === "string"
+					? sanitizeStatusText(candidate.resetCountdown)
+					: "";
 			const usedPercent =
 				candidate.usedPercent ?? 100 - candidate.remainingPercent;
 			const displayPercent =
@@ -331,6 +338,9 @@ export function parseSubscriptionUsageEvent(
 					...(candidate.resetsAt === undefined
 						? {}
 						: { resetsAt: candidate.resetsAt }),
+					...(resetCountdown && resetCountdown.length <= 16
+						? { resetCountdown }
+						: {}),
 				},
 			];
 		})
