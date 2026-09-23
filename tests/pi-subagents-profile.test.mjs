@@ -16,7 +16,7 @@ const routing = {
 	scout: ["kimi-coding/k3", "high"],
 	delegate: ["openai-codex/gpt-6-astra", "xhigh"],
 	researcher: ["xai/grok-4.7", "xhigh"],
-	worker: ["openai-codex/gpt-6-astra", "medium"],
+	worker: ["openai-codex/gpt-6-sol", "high"],
 	reviewer: ["xai/grok-4.7", "xhigh"],
 	oracle: ["openai-codex/gpt-6-astra", "max"],
 };

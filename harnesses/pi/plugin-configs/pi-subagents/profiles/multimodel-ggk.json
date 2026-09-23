@@ -14,8 +14,8 @@
 				"thinking": "xhigh"
 			},
 			"worker": {
-				"model": "openai-codex/gpt-6-astra",
-				"thinking": "medium"
+				"model": "openai-codex/gpt-6-sol",
+				"thinking": "high"
 			},
 			"reviewer": {
 				"model": "xai/grok-4.7",
