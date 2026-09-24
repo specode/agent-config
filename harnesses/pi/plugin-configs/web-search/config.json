@@ -1,6 +1,10 @@
 {
 	"workflow": "auto-summary",
 	"allowBrowserCookies": false,
+	"searchRouting": {
+		"providers": ["openai", "xai", "kimi"],
+		"fallbackOn": ["transient", "quota", "network", "invalid-response"]
+	},
 	"ssrf": {
 		"allowRanges": ["198.18.0.0/15"]
 	}
