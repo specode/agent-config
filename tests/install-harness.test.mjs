@@ -432,7 +432,7 @@ test("installs replacement before uninstalling the exact old package and preserv
 	assert.equal(
 		JSON.parse(readFileSync(join(f.agentDir, "extensions/fast.json")))
 			.enabled,
-		true,
+		false,
 	);
 	assert.equal(
 		JSON.parse(readFileSync(join(f.agentDir, "npm/package.json"))).dependencies[
