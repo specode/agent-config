@@ -3,6 +3,7 @@ import test from "node:test";
 import {
 	beginUiMetaRun,
 	canCommitUiMetaRecap,
+	diagnoseUiMetaRecapMiss,
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
@@ -167,4 +168,71 @@ test("reads and strips legacy one-line records for compatibility", () => {
 		{ v: 1, kind: "turn_end", recap: "Done" },
 	]);
 	assert.equal(stripUiMetaBlocks(legacy, true), "Normal response");
+});
+
+test("accepts and strips an end record appended to the last prose line", () => {
+	const record = meta({ v: 1, kind: "turn_end", recap: "Done" });
+	const text = `Normal response\nLast line.${record}`;
+	assert.deepEqual(extractUiMetaRecords(text, limits), [
+		{ v: 1, kind: "turn_end", recap: "Done" },
+	]);
+	assert.equal(stripUiMetaBlocks(text, true), "Normal response\nLast line.");
+	assert.equal(stripUiMetaBlocks(`Last line. ${record}`), "Last line.");
+
+	const invalid = `Last line.${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`;
+	assert.deepEqual(extractUiMetaRecords(invalid, limits), []);
+	assert.equal(stripUiMetaBlocks(invalid, true), "Last line.");
+
+	const inlineStart = `Last line.${meta({ v: 1, kind: "turn_start", title: "No" })}`;
+	assert.deepEqual(extractUiMetaRecords(inlineStart, limits), []);
+	const earlier = `First line.${record}\nLast line`;
+	assert.deepEqual(extractUiMetaRecords(earlier, limits), []);
+	assert.equal(stripUiMetaBlocks(earlier, true), earlier);
+});
+
+test("hides an unfinished inline end record only while it is incomplete", () => {
+	assert.equal(
+		stripUiMetaBlocks(`Last line.${UI_META_SENTINEL}{"v":1,"kind":"tu`, true),
+		"Last line.",
+	);
+	assert.equal(stripUiMetaBlocks("Last line.@@PI_UI", true), "Last line.");
+	assert.equal(stripUiMetaBlocks("Last line.@@PI_UI", false), "Last line.@@PI_UI");
+	assert.equal(stripUiMetaBlocks("Mail me @@", true), "Mail me @@");
+});
+
+test("diagnoses why a final response produced no recap", () => {
+	const start = meta({ v: 1, kind: "turn_start", title: "Test" });
+	assert.deepEqual(
+		diagnoseUiMetaRecapMiss(`${start}\nNormal response`, limits),
+		{ reason: "missing" },
+	);
+	assert.deepEqual(diagnoseUiMetaRecapMiss(start, limits), {
+		reason: "missing",
+	});
+	assert.deepEqual(
+		diagnoseUiMetaRecapMiss(
+			`Normal response\n${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"a"b"}`,
+			limits,
+		),
+		{
+			reason: "invalid",
+			snippet: `${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"a"b"}`,
+		},
+	);
+	assert.deepEqual(
+		diagnoseUiMetaRecapMiss(
+			`Normal response\n${meta({ v: 1, kind: "turn_end", recap: "Done" })}\nTrailing prose`,
+			limits,
+		),
+		{
+			reason: "misplaced",
+			snippet: meta({ v: 1, kind: "turn_end", recap: "Done" }),
+		},
+	);
+	const long = diagnoseUiMetaRecapMiss(
+		`Normal response\n${UI_META_SENTINEL}${"x".repeat(400)}`,
+		limits,
+	);
+	assert.equal(long.reason, "invalid");
+	assert.equal(long.reason === "invalid" && Array.from(long.snippet).length, 160);
 });

@@ -9,17 +9,20 @@ import type { SessionUiConfig } from "./config.ts";
 import {
 	beginUiMetaRun,
 	canCommitUiMetaRecap,
+	diagnoseUiMetaRecapMiss,
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
 	UI_META_SENTINEL,
 	type UiMetaLimits,
+	type UiMetaRecapMiss,
 	type UiMetaRecord,
 } from "./ui-meta-core.ts";
 import type { SessionTitleController } from "./title-controller.ts";
 
 const UI_META_STATE_TYPE = "session-ui:ui-meta-state";
 const TURN_RECAP_TYPE = "session-ui:turn-recap";
+const RECAP_MISS_TYPE = "session-ui:recap-miss";
 const I_RECAP = "↳";
 
 type UiMetaConfig = SessionUiConfig["uiMeta"];
@@ -36,6 +39,14 @@ interface TurnRecapData {
 	text: string;
 	timestamp: number;
 }
+
+/** Hidden diagnostic: why a final response in this run produced no recap. */
+type RecapMissData = {
+	v: 1;
+	reason: UiMetaRecapMiss["reason"] | "early";
+	snippet?: string;
+	timestamp: number;
+};
 
 function isAssistantMessage(
 	message: AgentMessage,
@@ -198,6 +209,9 @@ export function registerUiMeta(
 	let taskReceived = !config.recap.enabled;
 	let stateDirty = false;
 	let pendingRecaps: TurnRecapData[] = [];
+	let pendingRecapMisses: RecapMissData[] = [];
+	let recapMiss: RecapMissData | undefined;
+	let earlyRecapSeen = false;
 
 	const buildRequestMarker = (needStart: boolean, needRecap: boolean) =>
 		`<ui_meta_request>${JSON.stringify({
@@ -235,6 +249,10 @@ export function registerUiMeta(
 			pi.appendEntry<TurnRecapData>(TURN_RECAP_TYPE, recap);
 		}
 		pendingRecaps = [];
+		for (const miss of pendingRecapMisses) {
+			pi.appendEntry<RecapMissData>(RECAP_MISS_TYPE, miss);
+		}
+		pendingRecapMisses = [];
 		if (!stateDirty) return;
 		pi.appendEntry<UiMetaStateData>(UI_META_STATE_TYPE, {
 			v: 1,
@@ -304,6 +322,17 @@ export function registerUiMeta(
 		}
 	};
 
+	const describeRecapMiss = (text: string): RecapMissData => {
+		const miss = diagnoseUiMetaRecapMiss(text, limits);
+		return {
+			v: 1,
+			...(miss.reason === "missing" && earlyRecapSeen
+				? { reason: "early" as const }
+				: miss),
+			timestamp: Date.now(),
+		};
+	};
+
 	pi.registerEntryRenderer<TurnRecapData>(
 		TURN_RECAP_TYPE,
 		(entry, _options, theme) =>
@@ -329,6 +358,9 @@ export function registerUiMeta(
 		currentTask = undefined;
 		taskReceived = !config.recap.enabled;
 		pendingRecaps = [];
+		pendingRecapMisses = [];
+		recapMiss = undefined;
+		earlyRecapSeen = false;
 		if (!enabledForSession) return;
 		restoreState(ctx);
 	});
@@ -338,7 +370,11 @@ export function registerUiMeta(
 		flushPendingEntries();
 		const isCompactionContinuation = continueAfterCompaction && requestActive;
 		continueAfterCompaction = false;
-		if (!isCompactionContinuation) taskReceived = !config.recap.enabled;
+		if (!isCompactionContinuation) {
+			taskReceived = !config.recap.enabled;
+			recapMiss = undefined;
+			earlyRecapSeen = false;
+		}
 		requestActive = true;
 		({ startReceived, recapReceived } = beginUiMetaRun(
 			startMetadataEnabled,
@@ -371,19 +407,29 @@ export function registerUiMeta(
 
 	pi.on("message_end", (event) => {
 		if (!enabledForSession || !isAssistantMessage(event.message)) return;
-		applyRecords(
-			extractUiMetaRecords(assistantText(event.message), limits),
-			canCommitUiMetaRecap(
-				event.message.stopReason,
-				event.message.content.some((entry) => entry.type === "toolCall"),
-			),
+		const text = assistantText(event.message);
+		const records = extractUiMetaRecords(text, limits);
+		const allowRecap = canCommitUiMetaRecap(
+			event.message.stopReason,
+			event.message.content.some((entry) => entry.type === "toolCall"),
 		);
+		const recapPending =
+			requestActive && config.recap.enabled && !recapReceived;
+		applyRecords(records, allowRecap);
+		if (recapPending) {
+			if (!allowRecap && records.some((record) => record.kind === "turn_end")) {
+				earlyRecapSeen = true;
+			}
+			if (allowRecap) recapMiss = recapReceived ? undefined : describeRecapMiss(text);
+		}
 		const replacement = stripMessageMetadata(event.message);
 		return replacement ? { message: replacement } : undefined;
 	});
 
 	pi.on("agent_end", () => {
 		if (!enabledForSession) return;
+		if (recapMiss && !recapReceived) pendingRecapMisses.push(recapMiss);
+		recapMiss = undefined;
 		flushPendingEntries();
 	});
 
@@ -426,6 +472,9 @@ export function registerUiMeta(
 		// Navigation has already selected a different branch; never flush old state into it.
 		stateDirty = false;
 		pendingRecaps = [];
+		pendingRecapMisses = [];
+		recapMiss = undefined;
+		earlyRecapSeen = false;
 		requestActive = false;
 		requestMarker = "";
 		taskReceived = !config.recap.enabled;

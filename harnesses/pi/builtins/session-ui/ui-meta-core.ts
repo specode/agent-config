@@ -139,11 +139,10 @@ function protocolBody(line: string): string | undefined {
 	return body;
 }
 
-function parseProtocolLine(
-	line: string,
+function parseProtocolBody(
+	body: string | undefined,
 	limits: UiMetaLimits,
 ): UiMetaRecord | undefined {
-	const body = protocolBody(line);
 	if (!body || body.length > 4_096) return undefined;
 	try {
 		return parseRecord(JSON.parse(body) as unknown, limits);
@@ -151,6 +150,33 @@ function parseProtocolLine(
 		// The metadata channel is best-effort; malformed model output stays non-fatal.
 		return undefined;
 	}
+}
+
+function parseProtocolLine(
+	line: string,
+	limits: UiMetaLimits,
+): UiMetaRecord | undefined {
+	return parseProtocolBody(protocolBody(line), limits);
+}
+
+/** Index of an end record appended to prose on the same line, or -1. */
+function inlineSentinelIndex(line: string): number {
+	const index = line.lastIndexOf(UI_META_SENTINEL);
+	return index > 0 && line.slice(0, index).trim() ? index : -1;
+}
+
+/** Models sometimes append turn_end to the last prose line instead of a new line. */
+function parseInlineTurnEnd(
+	line: string,
+	limits: UiMetaLimits,
+): UiMetaRecord | undefined {
+	const index = inlineSentinelIndex(line);
+	if (index < 0) return undefined;
+	const record = parseProtocolBody(
+		line.slice(index + UI_META_SENTINEL.length).trim(),
+		limits,
+	);
+	return record?.kind === "turn_end" ? record : undefined;
 }
 
 function boundaryLineIndexes(lines: string[]): number[] {
@@ -178,14 +204,65 @@ export function extractUiMetaRecords(
 	for (const [position, index] of indexes.entries()) {
 		const line = lines[index];
 		if (line === undefined) continue;
-		const record = parseProtocolLine(line, limits);
+		const isLast = index === indexes.at(-1);
+		const record =
+			parseProtocolLine(line, limits) ??
+			(isLast ? parseInlineTurnEnd(line, limits) : undefined);
 		if (!record) continue;
 		if (record.kind === "turn_start" && position === 0) records.push(record);
-		if (record.kind === "turn_end" && index === indexes.at(-1)) {
-			records.push(record);
-		}
+		if (record.kind === "turn_end" && isLast) records.push(record);
 	}
 	return records;
+}
+
+export type UiMetaRecapMiss =
+	| { reason: "missing" }
+	| { reason: "invalid" | "misplaced"; snippet: string };
+
+const RECAP_MISS_SNIPPET_LENGTH = 160;
+
+function protocolMarkerIndex(line: string): number {
+	const indexes = [UI_META_SENTINEL, LEGACY_UI_META_OPEN_TAG]
+		.map((marker) => line.indexOf(marker))
+		.filter((index) => index >= 0);
+	return indexes.length ? Math.min(...indexes) : -1;
+}
+
+function protocolSnippet(line: string, markerIndex: number): string {
+	return sanitizeUiMetaText(line.slice(markerIndex), RECAP_MISS_SNIPPET_LENGTH);
+}
+
+/**
+ * Explain why a final response produced no turn_end record, using the raw text
+ * before metadata stripping. The result is diagnostic only and never displayed.
+ */
+export function diagnoseUiMetaRecapMiss(
+	text: string,
+	limits: UiMetaLimits,
+): UiMetaRecapMiss {
+	const lines = text.split(/\r?\n/);
+	const lastIndex = boundaryLineIndexes(lines).at(-1);
+	const last = lastIndex === undefined ? undefined : lines[lastIndex];
+	if (last !== undefined) {
+		const markerIndex = protocolMarkerIndex(last);
+		if (
+			markerIndex >= 0 &&
+			parseProtocolLine(last, limits)?.kind !== "turn_start"
+		) {
+			return { reason: "invalid", snippet: protocolSnippet(last, markerIndex) };
+		}
+	}
+	for (const [index, line] of lines.entries()) {
+		if (index === lastIndex) continue;
+		const markerIndex = protocolMarkerIndex(line);
+		if (markerIndex >= 0 && line.includes("turn_end", markerIndex)) {
+			return {
+				reason: "misplaced",
+				snippet: protocolSnippet(line, markerIndex),
+			};
+		}
+	}
+	return { reason: "missing" };
 }
 
 function stripCompleteLegacyBoundaryBlocks(text: string): string {
@@ -244,7 +321,37 @@ function stripProtocolBoundaryLines(
 			break;
 		lines.splice(last, 1);
 	}
+	stripInlineTurnEnd(lines, hideIncomplete);
 	return lines.join("\n");
+}
+
+const MIN_INLINE_SENTINEL_PREFIX = 3;
+
+function stripInlineTurnEnd(lines: string[], hideIncomplete: boolean): void {
+	const last = boundaryLineIndexes(lines).at(-1);
+	const line = last === undefined ? undefined : lines[last];
+	if (last === undefined || line === undefined) return;
+
+	const index = inlineSentinelIndex(line);
+	if (index >= 0) {
+		const body = line.slice(index + UI_META_SENTINEL.length).trim();
+		// A complete record ends the line; an unfinished one has not closed yet.
+		if (body.endsWith("}") || (hideIncomplete && !body.includes("}"))) {
+			lines[last] = line.slice(0, index).trimEnd();
+		}
+		return;
+	}
+	if (!hideIncomplete) return;
+	for (
+		let length = Math.min(UI_META_SENTINEL.length - 1, line.length - 1);
+		length >= MIN_INLINE_SENTINEL_PREFIX;
+		length--
+	) {
+		if (line.endsWith(UI_META_SENTINEL.slice(0, length))) {
+			lines[last] = line.slice(0, -length).trimEnd();
+			return;
+		}
+	}
 }
 
 /**

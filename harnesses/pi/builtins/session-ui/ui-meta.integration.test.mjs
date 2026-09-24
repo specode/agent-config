@@ -69,6 +69,14 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		end: () => { emit("agent_end"); emit("agent_settled"); },
 		entries: () => branch,
 		recaps: () => branch.filter((entry) => entry.customType === "session-ui:turn-recap").map((entry) => entry.data.text),
+		misses: () => branch.filter((entry) => entry.customType === "session-ui:recap-miss")
+			.map(({ data: { reason, snippet } }) => (snippet ? { reason, snippet } : { reason })),
+		raw: (text, stopReason = "stop", toolCalls = false) => emit("message_end", {
+			message: { role: "assistant", stopReason, content: [
+				{ type: "text", text },
+				...(toolCalls ? [{ type: "toolCall", id: "1", name: "test", arguments: {} }] : []),
+			] },
+		}),
 		setBranch: (entries) => { branch = structuredClone(entries); emit("session_tree"); },
 		name: () => sessionName,
 		render: (text) => renderers.get("session-ui:turn-recap")({ data: { text } }, {}, {
@@ -172,6 +180,38 @@ test("ignores failed and tool-bearing recaps and preserves task identity through
 	h.message([{ kind: "turn_end", recap: "Stale response" }]);
 	h.end();
 	assert.deepEqual(h.recaps(), ["Actual task progress"]);
+});
+
+test("records a hidden reason when a final response yields no recap", options, () => {
+	const h = harness();
+	h.begin();
+	h.message([start({ action: "set", name: "Task" })]);
+	h.end();
+	assert.deepEqual(h.misses(), [{ reason: "missing" }]);
+
+	h.begin();
+	const replacement = h.raw(`Answer\n${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`);
+	assert.deepEqual(replacement.message.content, [{ type: "text", text: "Answer" }]);
+	h.end();
+	assert.deepEqual(h.misses().at(-1), {
+		reason: "invalid",
+		snippet: `${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`,
+	});
+
+	h.begin();
+	h.message([{ kind: "turn_end", recap: "Too early" }], "stop", true);
+	h.raw("Final answer");
+	h.end();
+	assert.equal(h.misses().at(-1).reason, "early");
+
+	h.begin();
+	h.raw(`Final answer.${meta({ kind: "turn_end", recap: "Inline progress" })}`);
+	h.end();
+	h.begin();
+	h.raw("Aborted answer", "aborted");
+	h.end();
+	assert.deepEqual(h.recaps(), ["Inline progress"]);
+	assert.equal(h.misses().length, 3);
 });
 
 test("supports recap-only configuration and leaves non-TUI sessions untouched", options, () => {
