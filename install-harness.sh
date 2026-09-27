@@ -286,6 +286,9 @@ claude-code)
 pi)
 	HARNESS_LABEL='Pi'
 	prepare_pi_session_ui
+	PI_SOL_RETIRED_MANIFEST="$INSTALL_TEMP_ROOT/pi-sol-retired"
+	# Plan only within the install target; retire paths in the shared transaction.
+	node "$AGENT_CONFIG_ROOT/lib/pi-sol-pi-cleanup.mjs" "$AGENT_CONFIG_INSTALL_HOME" >"$PI_SOL_RETIRED_MANIFEST"
 	managed_entries() {
 		printf '%s\n' \
 			'harnesses/pi/config/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
@@ -298,10 +301,10 @@ pi)
 			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
 			'harnesses/pi/plugin-configs/pi-subagents/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
 			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
-			'harnesses/pi/plugin-configs/sol-pi/config.json|.pi/agent/sol-pi.json|file|-|配置|SoL-Pi' \
 			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
 			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/plugin-configs/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
+		cat "$PI_SOL_RETIRED_MANIFEST"
 	}
 	;;
 -h | --help)
@@ -317,6 +320,20 @@ esac
 
 install_managed_group "$HARNESS_ID" "$HARNESS_LABEL"
 if [ "$HARNESS_ID" = 'pi' ]; then
+	if [ "${INSTALL_MANAGED_DECLINED:-0}" -eq 0 ]; then
+		if ! node "$AGENT_CONFIG_ROOT/lib/pi-sol-pi-cleanup.mjs" "$AGENT_CONFIG_INSTALL_HOME" >"$INSTALL_TEMP_ROOT/pi-sol-remaining"; then
+			error "SoL-Pi 清理复核失败；新配置及备份已保留，请检查 $BACKUP_ROOT 后重试"
+			exit 1
+		fi
+		if [ -s "$INSTALL_TEMP_ROOT/pi-sol-remaining" ]; then
+			error "SoL-Pi 仍有残留；新配置及备份已保留在 ${BACKUP_ROOT}，请退出仍加载旧插件的 Pi 进程后重跑安装器"
+			exit 1
+		fi
+		if [ -s "$PI_SOL_RETIRED_MANIFEST" ]; then
+			info "旧 SoL-Pi 安装包、配置和专属缓存已移至备份：$BACKUP_ROOT/pi"
+			warn '仍加载 SoL-Pi 的进程可能重建缓存；请退出这些 Pi 进程后重跑安装器复查'
+		fi
+	fi
 	retire_legacy_pi_work_animation
 	retire_removed_pi_image_gen
 	retire_removed_pi_openai_fast

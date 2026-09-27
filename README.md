@@ -20,7 +20,7 @@
 
 依赖：Pi 配置安装需要 `rsync`、Node 和 `pi` 命令；Claude Code 状态栏需要 `jq`。
 
-有冲突时，安装器会询问是否备份并覆盖。安装后重启工具；Pi 也可执行 `/reload`。
+有冲突时，安装器会询问是否备份并覆盖，已退役插件的托管文件也会一起清理并备份。更新 Pi 配置前请先退出正在运行的 Pi，避免旧插件继续写入缓存；安装后重新启动。
 
 **安装前注意：**
 
@@ -70,7 +70,6 @@
 | [Fast](harnesses/pi/builtins/fast/README.md) | Codex 尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
 | `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
-| SoL-Pi | 优化工具输出与上下文 | 随工具调用工作 |
 | `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
 
 涉及账号、浏览器或系统权限的插件，需自行完成授权和依赖配置。
@@ -104,7 +103,6 @@
 | [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) | `~/.pi/agent/web-search.json` |
 | [代码分析](harnesses/pi/plugin-configs/pi-lens/config.json) | `~/.pi-lens/config.json` |
 | [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) | `~/.pi/agent/pi-fff.json` |
-| [上下文优化](harnesses/pi/plugin-configs/sol-pi/config.json) | `~/.pi/agent/sol-pi.json` |
 
 额外提供[多模型子代理 Profile](harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json)，默认不激活。
 安装位置为 `~/.pi/agent/profiles/pi-subagents/multimodel-ggk.json`。先登录相关 provider，再通过 pi-subagents 选择该 Profile。

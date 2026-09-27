@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	readdirSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,6 +104,7 @@ function install(
 		env: {
 			...process.env,
 			PATH: `${f.bin}:${process.env.PATH}`,
+			HOME: join(f.root, "unrelated-home"),
 			AGENT_CONFIG_INSTALL_HOME: f.home,
 			// The installer must override an unrelated active session's agent dir.
 			PI_CODING_AGENT_DIR: join(f.root, "unrelated-agent"),
@@ -147,7 +150,6 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"plugin-configs/pi-subagents/profiles/multimodel-ggk.json": ".pi/agent/profiles/pi-subagents/multimodel-ggk.json",
 		"plugin-configs/pi-lens/config.json": ".pi-lens/config.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
-		"plugin-configs/sol-pi/config.json": ".pi/agent/sol-pi.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
 	};
 	for (const [source, target] of Object.entries(files)) {
@@ -162,6 +164,208 @@ test("maps the three source categories to Pi runtime paths without installing in
 	}
 	assert.equal(existsSync(join(f.root, "unrelated-agent")), false);
 	assertSuccess(install(f));
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assert.deepEqual(calls(f), []);
+});
+
+const SOL_SOURCE = "git:github.com/NVlabs/SoL-Pi";
+const SOL_PACKAGE = "git/github.com/NVlabs/SoL-Pi";
+
+function seedSolPi(f, { parts = ["config", "package", "cache"], declaration = true } = {}) {
+	const files = new Map();
+	if (parts.includes("config")) files.set("sol-pi.json", '{"observationPack":true}\n');
+	if (parts.includes("package")) {
+		files.set(`${SOL_PACKAGE}/index.ts`, "old extension\n");
+		files.set(`${SOL_PACKAGE}/.git/config`, "git metadata\n");
+		files.set(`${SOL_PACKAGE}/package.json`, '{"scripts":{"preuninstall":"exit 88"}}\n');
+		files.set(`${SOL_PACKAGE}/package-lock.json`, '{"lockfileVersion":3}\n');
+		files.set(`${SOL_PACKAGE}/node_modules/fixture/index.js`, "dependency\n");
+	}
+	if (parts.includes("cache")) {
+		files.set("sessions/project/sol-pi/session-id/observation-pack/objects/obs.txt", "cached output\n");
+		files.set("sessions/project/parent/run-0/sol-pi/child/ledger.jsonl", "cached ledger\n");
+	}
+	if (declaration) {
+		const path = join(f.agentDir, "settings.json");
+		const settings = JSON.parse(readFileSync(path));
+		settings.packages.push(SOL_SOURCE);
+		files.set("settings.json", JSON.stringify(settings));
+	}
+	for (const [relative, content] of files) {
+		const path = join(f.agentDir, relative);
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, content);
+	}
+	return files;
+}
+
+function solBackup(f) {
+	const root = join(f.home, ".agent-config-backups");
+	const backups = readdirSync(root);
+	assert.equal(backups.length, 1);
+	return join(root, backups[0], "pi/.pi/agent");
+}
+
+function assertSolRetired(f, files) {
+	const backup = solBackup(f);
+	for (const [relative, content] of files) {
+		assert.equal(readFileSync(join(backup, relative), "utf8"), content, relative);
+		if (relative !== "settings.json") assert.equal(existsSync(join(f.agentDir, relative)), false, relative);
+	}
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
+	assert.equal(settings.packages.includes(SOL_SOURCE), false);
+	assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-sol"));
+	assert.deepEqual(calls(f), []);
+}
+
+function interceptMove(f, condition, action = "process.exit(1);") {
+	const marker = join(f.root, "intercepted-move");
+	writeFileSync(join(f.bin, "mv"), `#!/usr/bin/env node
+const fs = require("node:fs"), { spawnSync } = require("node:child_process");
+const args = process.argv.slice(2);
+if ((${condition}) && !fs.existsSync(${JSON.stringify(marker)})) {
+ fs.writeFileSync(${JSON.stringify(marker)}, "1");
+ ${action}
+}
+const result = spawnSync("mv", args, { stdio: "inherit", env: { ...process.env, PATH: ${JSON.stringify(process.env.PATH)} } });
+process.exit(result.status ?? 1);
+`, { mode: 0o755 });
+}
+
+test("retires the complete SoL-Pi Git checkout and nested caches in one backed-up transaction", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const files = seedSolPi(f);
+	const preserved = [
+		join(f.agentDir, "sessions/project/history.jsonl"),
+		join(f.agentDir, "sessions/project/parent/run-0/session.jsonl"),
+		join(f.agentDir, "sessions/--work-SoL-Pi--/history.jsonl"),
+		join(f.agentDir, "extensions/custom/index.ts"),
+		join(f.agentDir, "auth.json"),
+		join(f.root, "unrelated-agent/sol-pi.json"),
+		join(f.root, "unrelated-agent/sessions/project/sol-pi/obs.txt"),
+		join(f.root, "unrelated-home/.pi/agent/sol-pi.json"),
+		join(f.root, `unrelated-home/.pi/agent/${SOL_PACKAGE}/index.ts`),
+		join(f.root, "unrelated-home/.pi/agent/sessions/project/sol-pi/obs.txt"),
+	];
+	for (const path of preserved) {
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, "preserve fixture\n");
+	}
+	const result = install(f);
+	assertSuccess(result);
+	assert.match(result.stdout, /SoL-Pi.*备份/);
+	assert.match(result.stdout, /进程可能重建缓存/);
+	assertSolRetired(f, files);
+	for (const path of preserved) assert.equal(readFileSync(path, "utf8"), "preserve fixture\n");
+	assertSuccess(install(f));
+	assertSolRetired(f, files);
+});
+
+test("declining SoL-Pi retirement leaves the entire group and caches untouched", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const files = seedSolPi(f);
+	const result = install(f, { input: "n\n" });
+	assertSuccess(result);
+	for (const [relative, content] of files) assert.equal(readFileSync(join(f.agentDir, relative), "utf8"), content);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assert.doesNotMatch(result.stdout, /旧 SoL-Pi.*已移至备份/);
+	assert.deepEqual(calls(f), []);
+});
+
+for (const part of ["config", "package", "cache"]) {
+	test(`retires orphaned SoL-Pi ${part} with consent even when settings already match`, (t) => {
+		const f = fixture(t);
+		assertSuccess(install(f));
+		const files = seedSolPi(f, { parts: [part], declaration: false });
+		assertSuccess(install(f, { input: "n\n" }));
+		for (const [relative, content] of files) assert.equal(readFileSync(join(f.agentDir, relative), "utf8"), content);
+		assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+		assertSuccess(install(f));
+		assertSolRetired(f, files);
+		assertSuccess(install(f));
+		assertSolRetired(f, files);
+	});
+}
+
+for (const phase of ["backup", "install"]) {
+	test(`restores SoL-Pi package, config and caches when ${phase} fails`, (t) => {
+		const f = fixture(t);
+		assertSuccess(install(f));
+		const files = seedSolPi(f);
+		interceptMove(f, phase === "backup"
+			? `args[0] === ${JSON.stringify(join(f.agentDir, "sessions/project/sol-pi"))}`
+			: `args.at(-1) === ${JSON.stringify(join(f.agentDir, "extensions/session-ui"))}`);
+		const result = install(f);
+		assert.notEqual(result.status, 0);
+		assert.match(result.stderr, phase === "backup" ? /备份失败/ : /安装失败/);
+		for (const [relative, content] of files) assert.equal(readFileSync(join(f.agentDir, relative), "utf8"), content);
+		assert.deepEqual(calls(f), []);
+		assertSuccess(install(f));
+		for (const relative of files.keys()) {
+			if (relative !== "settings.json") assert.equal(existsSync(join(f.agentDir, relative)), false);
+		}
+	});
+}
+
+test("reports remaining SoL-Pi files even if the move command returns success", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	seedSolPi(f);
+	interceptMove(f, `args[0] === ${JSON.stringify(join(f.agentDir, SOL_PACKAGE))}`, "process.exit(0);");
+	const result = install(f);
+	assert.notEqual(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stderr, /SoL-Pi 仍有残留.*新配置及备份已保留/);
+	assert.equal(existsSync(join(f.agentDir, SOL_PACKAGE)), true);
+	assert.equal(existsSync(join(f.agentDir, "sol-pi.json")), false);
+	assert.equal(existsSync(join(solBackup(f), "sol-pi.json")), true);
+	assert.equal(JSON.parse(readFileSync(join(f.agentDir, "settings.json"))).packages.includes(SOL_SOURCE), false);
+	assertSuccess(install(f));
+	assert.equal(existsSync(join(f.agentDir, SOL_PACKAGE)), false);
+});
+
+test("does not follow session symlinks and only moves a cache symlink itself", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const outside = join(f.root, "outside");
+	mkdirSync(join(outside, "sol-pi"), { recursive: true });
+	writeFileSync(join(outside, "sol-pi/obs.txt"), "outside fixture\n");
+	const sessions = join(f.agentDir, "sessions");
+	mkdirSync(join(sessions, "project"), { recursive: true });
+	symlinkSync(outside, join(sessions, "linked-project"));
+	symlinkSync(join(outside, "sol-pi"), join(sessions, "project/sol-pi"));
+	assertSuccess(install(f));
+	assert.equal(lstatSync(join(solBackup(f), "sessions/project/sol-pi")).isSymbolicLink(), true);
+	assert.equal(existsSync(join(sessions, "project/sol-pi")), false);
+	assert.equal(lstatSync(join(sessions, "linked-project")).isSymbolicLink(), true);
+	assert.equal(readFileSync(join(outside, "sol-pi/obs.txt"), "utf8"), "outside fixture\n");
+});
+
+for (const relative of ["git", "sessions"]) {
+	test(`refuses a symlinked ${relative} cleanup parent before changing installed files`, (t) => {
+		const f = fixture(t);
+		assertSuccess(install(f));
+		const files = seedSolPi(f, { parts: ["config"] });
+		const outside = join(f.root, "outside");
+		mkdirSync(outside);
+		symlinkSync(outside, join(f.agentDir, relative));
+		const result = install(f);
+		assert.notEqual(result.status, 0);
+		assert.match(result.stderr, /Cleanup parent must be a real directory/);
+		for (const [path, content] of files) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), content);
+		assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	});
+}
+
+test("rejects cache paths containing manifest delimiters without changing the installation", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	mkdirSync(join(f.agentDir, "sessions/project|unsafe/sol-pi"), { recursive: true });
+	const result = install(f);
+	assert.notEqual(result.status, 0);
+	assert.match(result.stderr, /Cleanup path cannot be represented/);
+	assert.equal(existsSync(join(f.agentDir, "sessions/project|unsafe/sol-pi")), true);
 	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
 });
 
@@ -283,31 +487,6 @@ process.exit(result.status ?? 1);
 	assert.equal(existsSync(join(target, "index.ts")), true);
 });
 
-test("fresh and repeat installs deploy SoL-Pi without invoking package removal", (t) => {
-	const f = fixture(t);
-	const source = readFileSync(
-		join(ROOT, "harnesses/pi/plugin-configs/sol-pi/config.json"),
-		"utf8",
-	);
-	assert.deepEqual(JSON.parse(source), {
-		version: 1,
-		actionFusion: true,
-		observationPack: true,
-		evidencePreservingReducer: false,
-		onlineContextCompact: false,
-		cacheWriteReadRatio: 12.5,
-	});
-	assertSuccess(install(f));
-	assert.ok(existsSync(join(f.agentDir, "extensions/fast/index.ts")));
-	assert.equal(readFileSync(join(f.agentDir, "sol-pi.json"), "utf8"), source);
-	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
-	assert.ok(settings.packages.includes("git:github.com/NVlabs/SoL-Pi"));
-	assertSuccess(install(f));
-	assert.equal(readFileSync(join(f.agentDir, "sol-pi.json"), "utf8"), source);
-	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
-	assert.deepEqual(calls(f), []);
-});
-
 test("fresh and repeat installs copy the multimodel profile without activating it", (t) => {
 	const f = fixture(t);
 	const relativePath = "profiles/pi-subagents/multimodel-ggk.json";
@@ -327,32 +506,6 @@ test("fresh and repeat installs copy the multimodel profile without activating i
 			false,
 		);
 	}
-	assert.deepEqual(calls(f), []);
-});
-
-test("SoL-Pi conflicts require consent and preserve the previous config in backup", (t) => {
-	const f = fixture(t);
-	assertSuccess(install(f));
-	const configPath = join(f.agentDir, "sol-pi.json");
-	const source = readFileSync(configPath, "utf8");
-	const previous = JSON.stringify({
-		...JSON.parse(source),
-		actionFusion: false,
-	});
-	writeFileSync(configPath, previous);
-
-	assertSuccess(install(f, { input: "n\n" }));
-	assert.equal(readFileSync(configPath, "utf8"), previous);
-	const backupRoot = join(f.home, ".agent-config-backups");
-	assert.equal(existsSync(backupRoot), false);
-
-	assertSuccess(install(f));
-	assert.equal(readFileSync(configPath, "utf8"), source);
-	const backup = readdirSync(backupRoot)
-		.map((name) => join(backupRoot, name, "pi/.pi/agent/sol-pi.json"))
-		.find((path) => existsSync(path));
-	assert.ok(backup);
-	assert.equal(readFileSync(backup, "utf8"), previous);
 	assert.deepEqual(calls(f), []);
 });
 
