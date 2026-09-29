@@ -300,7 +300,8 @@ pi)
 			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|插件|Fast' \
 			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
 			'harnesses/pi/plugin-configs/pi-subagents/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
-			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|file|-|配置|多模型 Profile' \
+			'-|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|absent|-|配置|多模型 Profile 旧文件' \
+			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json|.pi/agent/profiles/pi-subagents/multimodel.json|file|-|配置|多模型 Profile' \
 			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
 			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/plugin-configs/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'

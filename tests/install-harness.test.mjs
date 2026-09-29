@@ -147,7 +147,7 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
 		"plugin-configs/pi-subagents/config.json": ".pi/agent/extensions/subagent/config.json",
-		"plugin-configs/pi-subagents/profiles/multimodel-ggk.json": ".pi/agent/profiles/pi-subagents/multimodel-ggk.json",
+		"plugin-configs/pi-subagents/profiles/multimodel.json": ".pi/agent/profiles/pi-subagents/multimodel.json",
 		"plugin-configs/pi-lens/config.json": ".pi-lens/config.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
@@ -489,9 +489,9 @@ process.exit(result.status ?? 1);
 
 test("fresh and repeat installs copy the multimodel profile without activating it", (t) => {
 	const f = fixture(t);
-	const relativePath = "profiles/pi-subagents/multimodel-ggk.json";
+	const relativePath = "profiles/pi-subagents/multimodel.json";
 	const source = readFileSync(
-		join(ROOT, "harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json"),
+		join(ROOT, "harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json"),
 		"utf8",
 	);
 	for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -507,6 +507,27 @@ test("fresh and repeat installs copy the multimodel profile without activating i
 		);
 	}
 	assert.deepEqual(calls(f), []);
+});
+
+test("renamed multimodel profile retires the old profile only after consent with a backup", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const legacyProfile = join(f.agentDir, "profiles/pi-subagents/multimodel-ggk.json");
+	writeFileSync(legacyProfile, "old profile\n");
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(legacyProfile, "utf8"), "old profile\n");
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	const result = install(f);
+	assertSuccess(result);
+	assert.match(result.stdout, /移除配置：多模型 Profile 旧文件/);
+	assert.equal(existsSync(legacyProfile), false);
+	assert.ok(existsSync(join(f.agentDir, "profiles/pi-subagents/multimodel.json")));
+	const backups = readdirSync(join(f.home, ".agent-config-backups"));
+	assert.equal(backups.length, 1);
+	assert.equal(
+		readFileSync(join(f.home, ".agent-config-backups", backups[0], "pi/.pi/agent/profiles/pi-subagents/multimodel-ggk.json"), "utf8"),
+		"old profile\n",
+	);
 });
 
 test("fresh and repeat installs deploy FFF config into the target agent directory", (t) => {

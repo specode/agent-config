@@ -5,7 +5,7 @@ import test from "node:test";
 const profile = JSON.parse(
 	readFileSync(
 		new URL(
-			"../harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json",
+			"../harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json",
 			import.meta.url,
 		),
 		"utf8",
@@ -13,7 +13,7 @@ const profile = JSON.parse(
 );
 const overrides = profile.subagents.agentOverrides;
 const routing = {
-	scout: ["kimi-coding/k3", "high"],
+	scout: ["openai-codex/gpt-6-sol", "medium"],
 	delegate: ["openai-codex/gpt-6-astra", "xhigh"],
 	researcher: ["xai/grok-4.7", "xhigh"],
 	worker: ["openai-codex/gpt-6-sol", "high"],
@@ -26,14 +26,14 @@ const disabledExternalAgents = [
 	"cursor-agent",
 	"cursor-agent-writer",
 ];
-const unmanagedExternalAgents = ["claude-code", "claude-code-writer"];
+const claudeCodeAgents = ["claude-code", "claude-code-writer"];
 
 test("multimodel profile uses one model per role without overriding builtin prompts or tools", () => {
 	assert.deepEqual(Object.keys(profile), ["subagents"]);
 	assert.deepEqual(Object.keys(profile.subagents), ["agentOverrides"]);
 	assert.deepEqual(
 		Object.keys(overrides).sort(),
-		[...Object.keys(routing), ...disabledExternalAgents].sort(),
+		[...Object.keys(routing), ...claudeCodeAgents, ...disabledExternalAgents].sort(),
 	);
 	for (const [name, [model, thinking]] of Object.entries(routing)) {
 		const override = overrides[name];
@@ -62,8 +62,18 @@ test("codex and cursor CLI variants remain disabled", () => {
 	}
 });
 
-test("claude-code variants keep builtin availability", () => {
-	for (const name of unmanagedExternalAgents) {
-		assert.equal(Object.hasOwn(overrides, name), false, name);
+test("claude-code variants join routing through descriptions only", () => {
+	for (const name of claudeCodeAgents) {
+		const override = overrides[name];
+		// External CLI runners reject model and thinking overrides at launch.
+		assert.deepEqual(Object.keys(override), ["description"], name);
+		assert.match(override.description, /Claude Code CLI/, name);
 	}
+	assert.match(overrides["claude-code"].description, /no file or shell access/);
+	assert.match(overrides["claude-code-writer"].description, /Second implementation worker/);
+	assert.match(overrides["claude-code-writer"].description, /cannot run tests/);
+});
+
+test("profile does not route any role to Kimi", () => {
+	assert.doesNotMatch(JSON.stringify(profile), /kimi/i);
 });

@@ -1,0 +1,51 @@
+{
+	"subagents": {
+		"agentOverrides": {
+			"scout": {
+				"model": "openai-codex/gpt-6-sol",
+				"thinking": "medium"
+			},
+			"delegate": {
+				"model": "openai-codex/gpt-6-astra",
+				"thinking": "xhigh"
+			},
+			"researcher": {
+				"model": "xai/grok-4.7",
+				"thinking": "xhigh"
+			},
+			"worker": {
+				"model": "openai-codex/gpt-6-sol",
+				"thinking": "high"
+			},
+			"reviewer": {
+				"model": "xai/grok-4.7",
+				"thinking": "xhigh",
+				"defaultContext": "fresh",
+				"acceptanceRole": "read-only"
+			},
+			"oracle": {
+				"model": "openai-codex/gpt-6-astra",
+				"thinking": "max",
+				"acceptanceRole": "read-only"
+			},
+			"claude-code": {
+				"description": "Claude via the local Claude Code CLI. Handoff-only read-only second opinion with no file or shell access: paste the plan, diff, or code excerpts into the task. Use for cross-model critique of risky plans or diffs alongside reviewer or oracle; not for repo exploration."
+			},
+			"claude-code-writer": {
+				"description": "Claude via the local Claude Code CLI. Second implementation worker alongside worker, with Read/Write/Edit/Glob/Grep only and no shell. Give it a well-specified, bounded change with the files and expected validation named; it cannot run tests, so the parent or worker validates afterward. Keep one writer per cwd/worktree; use a separate worktree when it runs in parallel with worker."
+			},
+			"codex-exec": {
+				"disabled": true
+			},
+			"codex-exec-writer": {
+				"disabled": true
+			},
+			"cursor-agent": {
+				"disabled": true
+			},
+			"cursor-agent-writer": {
+				"disabled": true
+			}
+		}
+	}
+}

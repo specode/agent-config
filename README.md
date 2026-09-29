@@ -104,8 +104,10 @@
 | [代码分析](harnesses/pi/plugin-configs/pi-lens/config.json) | `~/.pi-lens/config.json` |
 | [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) | `~/.pi/agent/pi-fff.json` |
 
-额外提供[多模型子代理 Profile](harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel-ggk.json)，默认不激活。
-安装位置为 `~/.pi/agent/profiles/pi-subagents/multimodel-ggk.json`。先登录相关 provider，再通过 pi-subagents 选择该 Profile。
+额外提供[多模型子代理 Profile](harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json)，默认不激活。
+安装位置为 `~/.pi/agent/profiles/pi-subagents/multimodel.json`。先登录相关 provider，再通过 `/subagents-load-profile multimodel` 选择该 Profile。
+
+该 Profile 按角色分配 GPT 与 Grok，并让 pi-subagents 内置的 Claude Code 子代理参与分工：`claude-code` 作只读的交叉意见，`claude-code-writer` 作第二个 worker。二者通过本机 `claude` CLI 运行，模型与思考强度取自 `~/.claude/settings.json`，需先登录 Claude Code。`claude-code` 没有文件与命令权限，只分析交给它的内容；`claude-code-writer` 只能读写文件、不能运行命令，改动需由主会话或 `worker` 验证。
 
 ### Claude Code
 
