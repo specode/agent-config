@@ -166,6 +166,7 @@ test("maps the three source categories to Pi runtime paths without installing in
 		assert.equal(existsSync(join(f.agentDir, path)), false, path);
 	}
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
+	assert.equal(settings.theme, "system");
 	assert.deepEqual(settings.defaultTools, ["+codemode"]);
 	assert.equal(existsSync(join(f.root, "unrelated-agent")), false);
 	assertSuccess(install(f));

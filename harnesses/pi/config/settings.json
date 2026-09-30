@@ -1,5 +1,5 @@
 {
-	"theme": "light/dark",
+	"theme": "system",
 	"enabledModels": [
 		"openai-codex/gpt-6-astra",
 		"openai-codex/gpt-6.1-sol",
