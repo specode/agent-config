@@ -8,6 +8,7 @@
 		"antigravity/gemini-3.8-flash",
 		"antigravity/claude-opus-4-6"
 	],
+	"defaultTools": ["+codemode"],
 	"externalEditor": "nvim",
 	"collapseChangelog": true,
 	"showHardwareCursor": true,

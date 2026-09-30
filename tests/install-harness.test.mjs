@@ -165,6 +165,8 @@ test("maps the three source categories to Pi runtime paths without installing in
 	for (const path of ["builtins", "plugin-configs", "config", "automode.json", "extensions/session-ui.ts", "extensions/pi-auto-review", "extensions/pi-permission-system"]) {
 		assert.equal(existsSync(join(f.agentDir, path)), false, path);
 	}
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
+	assert.deepEqual(settings.defaultTools, ["+codemode"]);
 	assert.equal(existsSync(join(f.root, "unrelated-agent")), false);
 	assertSuccess(install(f));
 	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);

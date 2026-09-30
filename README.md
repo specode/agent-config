@@ -86,6 +86,12 @@
 
 模型列入清单不代表账号已获授权，仍需登录对应 provider。
 
+**Codemode（Pi 内置）**
+
+仓库默认通过 `defaultTools: ["+codemode"]` 开启 Codemode，保留其他默认工具；无需 MCP 服务。重启 Pi 后，直接用自然语言要求 Agent 用 Codemode 批量调用工具、过滤或合并结果，例如“用 Codemode 并行查询 Git 状态和最近提交，只读操作，汇总结果”。
+
+配置位于 `~/.pi/agent/settings.json`；移除 `defaultTools` 中的 `+codemode` 可取消这项显式启用，但 MCP 服务仍可能自动启用它。保持默认 `on` 模式，普通工具仍可直接调用。脚本沙箱不限制被调用工具的实际权限，优先用于只读任务，避免并行修改同一文件。
+
 **MCP 服务（Pi 内置）**
 
 使用 Pi 0.99.1 的内置 MCP 支持，无需 `pi-mcp-adapter`。服务器配置放在 `~/.pi/agent/mcp.json`（个人）或 `.pi/mcp.json`（项目），不由本仓库安装器托管。

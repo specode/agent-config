@@ -13,10 +13,10 @@ const profile = JSON.parse(
 );
 const overrides = profile.subagents.agentOverrides;
 const routing = {
-	scout: ["openai-codex/gpt-6-sol", "medium"],
+	scout: ["openai-codex/gpt-6.1-sol", "medium"],
 	delegate: ["openai-codex/gpt-6-astra", "xhigh"],
 	researcher: ["xai/grok-4.7", "xhigh"],
-	worker: ["openai-codex/gpt-6-sol", "high"],
+	worker: ["openai-codex/gpt-6.1-sol", "high"],
 	reviewer: ["xai/grok-4.7", "xhigh"],
 	oracle: ["openai-codex/gpt-6-astra", "max"],
 };
