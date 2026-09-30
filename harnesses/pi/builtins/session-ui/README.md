@@ -113,8 +113,9 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `tokens` | 当前会话累计输入／输出 token，仓库配置已关闭 |
 | `cache` | 当前、最近五次 assistant 请求及会话的缓存命中率 |
 | `cost` | 当前会话已记录的费用估算；没有费用记录时显示 `$0.000` |
-| `mcp` | MCP 已连接／已启用数量及可用服务名称 |
 | `extensions` | 未被排除的其他扩展状态 |
+
+Pi 0.99.1 内置 MCP 尚未提供公开的连接状态接口，暂不显示 MCP 状态段。请通过 `/mcp` 查看真实连接状态；自定义配置中需移除旧的 `mcp` 段。
 
 例如，只显示模型、思考档位、目录和上下文：
 

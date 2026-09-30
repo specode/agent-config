@@ -27,6 +27,12 @@ test.after(() => {
 	rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 
+test("default statusline hides MCP without a public native connection status", () => {
+	const { config } = withConfig({});
+	assert.equal(config.statusline.segments.includes("mcp"), false);
+	assert.ok(config.statusline.extensionStatuses.exclude.includes("mcp"));
+});
+
 test("loads the integrated workAnimation config", () => {
 	const loaded = withConfig({
 		workAnimation: {

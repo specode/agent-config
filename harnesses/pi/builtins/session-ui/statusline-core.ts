@@ -10,12 +10,6 @@ export interface StatuslineLayoutItem {
 	compactWidth?: number;
 }
 
-export interface McpStatusView {
-	connectedCount: number;
-	enabledCount: number;
-	connectedNames: string[];
-}
-
 export type SubscriptionUsageWindowKind =
 	| "hourly"
 	| "weekly"
@@ -151,64 +145,6 @@ function sanitizeStatusText(value: string): string {
 		.replace(/[\r\n\t]/g, " ")
 		.replace(/ +/g, " ")
 		.trim();
-}
-
-export function parseMcpFooterText(text: string): McpStatusView | undefined {
-	const raw = sanitizeStatusText(text);
-	const compact = raw.match(/^MCP\s+(\d+)\s*\/\s*(\d+)$/i);
-	if (compact) {
-		return {
-			connectedCount: Number(compact[1]),
-			enabledCount: Number(compact[2]),
-			connectedNames: [],
-		};
-	}
-
-	const body = raw
-		.replace(/^🔌\s*/u, "")
-		.replace(/^MCP[:\s]+/i, "")
-		.trim();
-	const full = body.match(
-		/^(\d+)\s+servers?\s+enabled(?:\s+\((\d+)\s+connected\))?/i,
-	);
-	if (!full) return undefined;
-	return {
-		connectedCount: full[2] ? Number(full[2]) : 0,
-		enabledCount: Number(full[1]),
-		connectedNames: [],
-	};
-}
-
-/** Decodes the versioned pi-mcp-adapter status event at its boundary. */
-export function parseMcpStatusEvent(data: unknown): McpStatusView | undefined {
-	if (typeof data !== "object" || data === null) return undefined;
-	const snapshot = data as {
-		servers?: unknown;
-		connectedCount?: unknown;
-		disabledCount?: unknown;
-	};
-	const servers = Array.isArray(snapshot.servers) ? snapshot.servers : [];
-	const connectedNames = servers
-		.flatMap((server) => {
-			if (typeof server !== "object" || server === null) return [];
-			const { name, status } = server as {
-				name?: unknown;
-				status?: unknown;
-			};
-			return status === "connected" && typeof name === "string" ? [name] : [];
-		})
-		.sort((a, b) => a.localeCompare(b));
-	const disabledCount =
-		typeof snapshot.disabledCount === "number" ? snapshot.disabledCount : 0;
-	const connectedCount =
-		typeof snapshot.connectedCount === "number"
-			? snapshot.connectedCount
-			: connectedNames.length;
-	const enabledCount = Math.max(0, servers.length - disabledCount);
-	if (enabledCount <= 0 && connectedCount <= 0 && servers.length === 0) {
-		return undefined;
-	}
-	return { connectedCount, enabledCount, connectedNames };
 }
 
 function isSubscriptionUsageWindowKind(

@@ -57,7 +57,6 @@
 | `pi-lens` | 代码分析与导航 | “查找这个函数的定义和调用方” |
 | `pi-fff` | 文件与内容搜索 | “找到登录相关文件” |
 | `pi-web-access` | 网页搜索与读取 | “查一下官方文档中的用法” |
-| `pi-mcp-adapter` | 接入 MCP 服务 | 提供 MCP 地址，安装并完成所需授权 |
 | `pi-kimi-cu` | macOS 桌面操作 | 指定应用和需要执行的操作 |
 | `pi-kimi-webbridge-bootstrap` | 真实浏览器操作 | 指定网页和任务；需配置浏览器扩展 |
 | `pi-subscription-image` | 图片生成与编辑 | 描述要生成或修改的图片 |
@@ -86,6 +85,16 @@
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 
 模型列入清单不代表账号已获授权，仍需登录对应 provider。
+
+**MCP 服务（Pi 内置）**
+
+使用 Pi 0.99.1 的内置 MCP 支持，无需 `pi-mcp-adapter`。服务器配置放在 `~/.pi/agent/mcp.json`（个人）或 `.pi/mcp.json`（项目），不由本仓库安装器托管。
+
+- `/mcp`：管理服务器、查看连接状态与登录。
+- `pi mcp list`：从终端检查连接；`pi mcp login <server>`：完成 OAuth 授权。
+- 修改配置后执行 `/reload` 或重新启动 Pi。
+- 内置 MCP 暂无公开连接状态接口，session-ui 暂不显示 MCP 区块；连接状态请查看 `/mcp`。
+- 安装器会备份并卸载旧 `pi-mcp-adapter` 包，保留个人 MCP 配置及凭据；旧 `mcp-adapter.json` 不会自动转为原生配置，升级前须将服务器迁入 `mcp.json`。
 
 **界面与 Fast**
 

@@ -2,7 +2,7 @@
 	"theme": "light/dark",
 	"enabledModels": [
 		"openai-codex/gpt-6-astra",
-		"openai-codex/gpt-6-sol",
+		"openai-codex/gpt-6.1-sol",
 		"xai/grok-4.7",
 		"kimi-coding/k3",
 		"antigravity/gemini-3.8-flash",
@@ -22,7 +22,6 @@
 		"npm:pi-web-access",
 		"npm:@juicesharp/rpiv-ask-user-question",
 		"npm:pi-lens",
-		"npm:pi-mcp-adapter",
 		"npm:@specode/pi-kimi-cu",
 		"npm:@specode/pi-kimi-webbridge-bootstrap",
 		"npm:@specode/pi-last-model-effort",

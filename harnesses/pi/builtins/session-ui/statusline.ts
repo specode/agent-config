@@ -13,11 +13,8 @@ import {
 	findUnknownStatusSegments,
 	fitStatuslineItems,
 	isExtensionStatusExcluded,
-	parseMcpFooterText,
-	parseMcpStatusEvent,
 	parseSubscriptionUsageEvent,
 	separatorBetweenStatuslineSegments,
-	type McpStatusView,
 	type StatuslineOverflow,
 	type SubscriptionUsageView,
 	type SubscriptionUsageWindowKind,
@@ -39,7 +36,6 @@ const I_SESSION = "\uF02B";
 const I_TOKENS = "\uF1C9";
 const I_CACHE = "\uF49B";
 const I_COST = "\uF155";
-const I_MCP = "\uF1E6";
 const I_USAGE_HOURLY = "\uF017";
 const I_USAGE_WEEKLY = "\uF073";
 const I_USAGE_MONTHLY = "\uF133";
@@ -177,7 +173,6 @@ export function layoutStatusSegments(
 
 function registerBuiltInSegments(
 	registry: StatusSegmentRegistry,
-	getMcpFromEvent: () => McpStatusView | undefined,
 	getUsageFromEvent: () => SubscriptionUsageView | undefined,
 	excludedExtensionStatuses: readonly string[],
 ): void {
@@ -337,30 +332,6 @@ function registerBuiltInSegments(
 	});
 
 	registry.register({
-		id: "mcp",
-		priority: 15,
-		render: ({ footerData, theme }) => {
-			const footerStatus = footerData.getExtensionStatuses().get("mcp");
-			if (!footerStatus) return undefined;
-			const view = getMcpFromEvent() ?? parseMcpFooterText(footerStatus);
-			if (!view || view.enabledCount <= 0) return undefined;
-			const names = (getMcpFromEvent()?.connectedNames ?? view.connectedNames)
-				.map(sanitizeTerminalText)
-				.filter(Boolean)
-				.join(", ");
-			const suffix = names ? ` (${names})` : "";
-			return {
-				full: segment(
-					theme,
-					"accent",
-					I_MCP,
-					`MCP: ${view.connectedCount}/${view.enabledCount}${suffix}`,
-				),
-			};
-		},
-	});
-
-	registry.register({
 		id: "extensions",
 		priority: 10,
 		render: ({ footerData, theme }) => {
@@ -402,19 +373,12 @@ export function registerStatusline(
 	let enabled = true;
 	let requestRender: (() => void) | undefined;
 	let statsCache: { length: number; stats: Stats } | undefined;
-	let mcpFromEvent: McpStatusView | undefined;
 	let usageFromEvent: SubscriptionUsageView | undefined;
 	registerBuiltInSegments(
 		registry,
-		() => mcpFromEvent,
 		() => usageFromEvent,
 		config.extensionStatuses.exclude,
 	);
-
-	pi.events.on("pi-mcp-adapter/status/v1", (data) => {
-		mcpFromEvent = parseMcpStatusEvent(data);
-		requestRender?.();
-	});
 
 	pi.events.on(SUBSCRIPTION_USAGE_EVENT, (data) => {
 		usageFromEvent = parseSubscriptionUsageEvent(data);
@@ -484,7 +448,6 @@ export function registerStatusline(
 
 	pi.on("session_start", (_event, ctx) => {
 		statsCache = undefined;
-		mcpFromEvent = undefined;
 		usageFromEvent = undefined;
 		const unknownSegments = findUnknownStatusSegments(
 			config.segments,

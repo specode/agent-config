@@ -77,7 +77,6 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 			"tokens",
 			"cache",
 			"cost",
-			"mcp",
 			"extensions",
 		],
 		extensionStatuses: {

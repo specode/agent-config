@@ -178,11 +178,23 @@ retire_legacy_pi_web_search() {
 	info "旧的 ~/.pi/web-search.json 已迁移到备份，配置改由 ~/.pi/agent/web-search.json 提供"
 }
 
-legacy_pi_openai_fast_present() {
+legacy_pi_package_present() {
 	local agent_dir="$1"
-	local package_name='@diegopetrucci/pi-openai-fast'
+	local package_name="$2"
 	local package_dir="$agent_dir/npm/node_modules/$package_name"
 	local npm_manifest="$agent_dir/npm/package.json"
+	# Never let npm traverse links into another installation.
+	node - "$agent_dir" "$package_name" <<'NODE' || return 1
+const fs = require("node:fs"), path = require("node:path");
+const agent = path.resolve(process.argv[2]);
+const targets = [agent, path.join(agent, "npm"), path.join(agent, "npm/package.json"), path.join(agent, "npm/package-lock.json"), path.join(agent, "npm/node_modules")];
+let current = path.join(agent, "npm/node_modules");
+for (const part of process.argv[3].split("/")) { current = path.join(current, part); targets.push(current); }
+for (const target of targets) {
+ try { if (fs.lstatSync(target).isSymbolicLink()) throw new Error(`Refusing package cleanup through symlink: ${target}`); }
+ catch (error) { if (error.code !== "ENOENT") throw error; }
+}
+NODE
 	if [ -e "$package_dir" ] || [ -L "$package_dir" ]; then
 		printf '1'
 		return 0
@@ -192,7 +204,7 @@ legacy_pi_openai_fast_present() {
 		return 0
 	fi
 	if ! command -v node >/dev/null 2>&1; then
-		error '检查旧 OpenAI Fast 安装需要 node；新配置已安装，请补齐后重试'
+		error '检查旧插件安装需要 node；新配置已安装，请补齐后重试'
 		return 1
 	fi
 	node - "$npm_manifest" "$package_name" <<'NODE'
@@ -210,19 +222,19 @@ try {
 NODE
 }
 
-retire_removed_pi_openai_fast() {
+retire_removed_pi_package() {
 	[ "${INSTALL_MANAGED_DECLINED:-0}" -eq 0 ] || return 0
 
 	local agent_dir="$AGENT_CONFIG_INSTALL_HOME/.pi/agent"
-	local package_name='@diegopetrucci/pi-openai-fast'
+	local package_name="$1" label="$2" backup_name="$3"
 	local package_dir="$agent_dir/npm/node_modules/$package_name"
-	local backup_dir="$BACKUP_ROOT/pi-retired/openai-fast-package"
+	local backup_dir="$BACKUP_ROOT/pi-retired/$backup_name"
 	local present name remove_status=0
-	present="$(legacy_pi_openai_fast_present "$agent_dir")"
+	present="$(legacy_pi_package_present "$agent_dir" "$package_name")"
 	[ "$present" = '1' ] || return 0
 
 	if ! command -v pi >/dev/null 2>&1; then
-		error '卸载旧 OpenAI Fast 需要 pi；新配置已安装，请补齐后重试'
+		error "卸载旧 $label 需要 pi；新配置已安装，请补齐后重试"
 		return 1
 	fi
 
@@ -245,9 +257,9 @@ retire_removed_pi_openai_fast() {
 			npm_config_ignore_scripts=true npm_config_audit=false npm_config_fund=false \
 			pi remove "npm:$package_name" --no-approve
 	) || remove_status=$?
-	present="$(legacy_pi_openai_fast_present "$agent_dir")"
+	present="$(legacy_pi_package_present "$agent_dir" "$package_name")"
 	if [ "$present" = '1' ]; then
-		error "旧 OpenAI Fast 卸载失败，仍有残留（命令退出码 ${remove_status}）；新配置保留，备份位于 ${backup_dir}。修复后重跑安装器"
+		error "旧 $label 卸载失败，仍有残留（命令退出码 ${remove_status}）；新配置保留，备份位于 ${backup_dir}。修复后重跑安装器"
 		return 1
 	fi
 	# Pi may return nonzero after successful uninstall when settings were already migrated.
@@ -337,7 +349,8 @@ if [ "$HARNESS_ID" = 'pi' ]; then
 	fi
 	retire_legacy_pi_work_animation
 	retire_removed_pi_image_gen
-	retire_removed_pi_openai_fast
+	retire_removed_pi_package '@diegopetrucci/pi-openai-fast' 'OpenAI Fast' 'openai-fast-package'
+	retire_removed_pi_package 'pi-mcp-adapter' 'MCP adapter' 'mcp-adapter-package'
 	retire_legacy_pi_web_search
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then

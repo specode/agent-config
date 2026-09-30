@@ -7,8 +7,6 @@ import {
 	fitStatuslineItems,
 	isExtensionStatusExcluded,
 	matchesStatusPattern,
-	parseMcpFooterText,
-	parseMcpStatusEvent,
 	parseSubscriptionUsageEvent,
 	separatorBetweenStatuslineSegments,
 	type StatuslineLayoutItem,
@@ -128,42 +126,6 @@ test("unknown configured segments are reported", () => {
 		),
 		["missing"],
 	);
-});
-
-test("MCP footer fallback parses compact and full forms", () => {
-	assert.deepEqual(parseMcpFooterText("MCP 1/2"), {
-		connectedCount: 1,
-		enabledCount: 2,
-		connectedNames: [],
-	});
-	assert.deepEqual(
-		parseMcpFooterText("🔌 MCP: 2 servers enabled (1 connected)"),
-		{
-			connectedCount: 1,
-			enabledCount: 2,
-			connectedNames: [],
-		},
-	);
-});
-
-test("MCP event parsing prefers structured connected server data", () => {
-	assert.deepEqual(
-		parseMcpStatusEvent({
-			servers: [
-				{ name: "zeta", status: "connected" },
-				{ name: "alpha", status: "connected" },
-				{ name: "disabled", status: "disabled" },
-			],
-			connectedCount: 2,
-			disabledCount: 1,
-		}),
-		{
-			connectedCount: 2,
-			enabledCount: 2,
-			connectedNames: ["alpha", "zeta"],
-		},
-	);
-	assert.equal(parseMcpStatusEvent({ servers: [] }), undefined);
 });
 
 test("subscription usage event is decoded and sorted by canonical window", () => {

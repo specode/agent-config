@@ -20,7 +20,8 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const OLD_PACKAGE = "@diegopetrucci/pi-openai-fast";
 const SOURCE = `npm:${OLD_PACKAGE}`;
 
-function fixture(t) {
+function fixture(t, packageName = OLD_PACKAGE) {
+	const source = `npm:${packageName}`;
 	const root = mkdtempSync(join(tmpdir(), "agent-config-installer-test-"));
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	const home = join(root, "home");
@@ -37,19 +38,19 @@ const agent = process.env.PI_CODING_AGENT_DIR;
 assert.equal(agent, process.env.EXPECTED_AGENT_DIR);
 assert.equal(process.env.PI_OFFLINE, "1");
 assert.equal(process.env.npm_config_ignore_scripts, "true");
-assert.deepEqual(process.argv.slice(2), ["remove", ${JSON.stringify(SOURCE)}, "--no-approve"]);
+assert.deepEqual(process.argv.slice(2), ["remove", ${JSON.stringify(source)}, "--no-approve"]);
 assert.equal(fs.realpathSync(process.cwd()), fs.realpathSync(path.dirname(path.dirname(agent))));
 assert.ok(fs.existsSync(path.join(agent, "extensions/fast/index.ts")), "new plugin must be installed first");
 const settings = JSON.parse(fs.readFileSync(path.join(agent, "settings.json")));
-assert.equal(settings.packages.includes(${JSON.stringify(SOURCE)}), false);
+assert.equal(settings.packages.includes(${JSON.stringify(source)}), false);
 fs.appendFileSync(process.env.PI_TEST_CALL_LOG, JSON.stringify({ agent, args: process.argv.slice(2) }) + "\\n");
 if (process.env.PI_TEST_REMOVE_FAIL === "1") process.exit(9);
 if (process.env.PI_TEST_REMOVE_NOOP === "1") process.exit(0);
-fs.rmSync(path.join(agent, "npm/node_modules", ${JSON.stringify(OLD_PACKAGE)}), { recursive: true, force: true });
+fs.rmSync(path.join(agent, "npm/node_modules", ${JSON.stringify(packageName)}), { recursive: true, force: true });
 const manifestPath = path.join(agent, "npm/package.json");
 if (fs.existsSync(manifestPath)) {
  const manifest = JSON.parse(fs.readFileSync(manifestPath));
- for (const key of ["dependencies", "devDependencies", "optionalDependencies"]) if (manifest[key]) delete manifest[key][${JSON.stringify(OLD_PACKAGE)}];
+ for (const key of ["dependencies", "devDependencies", "optionalDependencies"]) if (manifest[key]) delete manifest[key][${JSON.stringify(packageName)}];
  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 }
 if (process.env.PI_TEST_REMOVE_NONZERO_AFTER === "1") process.exit(1);
@@ -62,7 +63,9 @@ if (process.env.PI_TEST_REMOVE_NONZERO_AFTER === "1") process.exit(1);
 		agentDir,
 		bin,
 		log,
-		packageDir: join(agentDir, "npm/node_modules", OLD_PACKAGE),
+		packageName,
+		source,
+		packageDir: join(agentDir, "npm/node_modules", packageName),
 	};
 }
 
@@ -71,14 +74,14 @@ function seedOld(f, { directory = true, declaration = true } = {}) {
 	const settings = JSON.parse(
 		readFileSync(join(ROOT, "harnesses/pi/config/settings.json")),
 	);
-	settings.packages.push(SOURCE);
+	settings.packages.push(f.source);
 	writeFileSync(join(f.agentDir, "settings.json"), JSON.stringify(settings));
 	writeFileSync(
 		join(f.agentDir, "npm/package.json"),
 		JSON.stringify({
 			dependencies: {
 				"unrelated-package": "1.0.0",
-				...(declaration ? { [OLD_PACKAGE]: "0.1.17" } : {}),
+				...(declaration ? { [f.packageName]: "0.1.17" } : {}),
 			},
 		}),
 	);
@@ -168,6 +171,60 @@ test("maps the three source categories to Pi runtime paths without installing in
 	assert.deepEqual(calls(f), []);
 });
 
+test("retires MCP adapter with backups while preserving native config and credentials", (t) => {
+	const f = fixture(t, "pi-mcp-adapter");
+	seedOld(f);
+	const preserved = ["mcp.json", "mcp-auth.json", "mcp-adapter.json", "mcp-cache.json"];
+	for (const file of preserved) writeFileSync(join(f.agentDir, file), "preserve sentinel\n");
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.ok(existsSync(f.packageDir));
+	assert.deepEqual(calls(f), []);
+	assertSuccess(install(f));
+	assert.equal(existsSync(f.packageDir), false);
+	assert.equal(calls(f).length, 1);
+	const root = join(f.home, ".agent-config-backups");
+	const backup = readdirSync(root).map((name) => join(root, name, "pi-retired/mcp-adapter-package")).find(existsSync);
+	assert.ok(backup);
+	assert.equal(readFileSync(join(backup, "previous-package/index.ts"), "utf8"), "old plugin fixture\n");
+	assert.ok(JSON.parse(readFileSync(join(backup, "package.json"))).dependencies["pi-mcp-adapter"]);
+	assert.ok(existsSync(join(backup, "package-lock.json")));
+	for (const file of preserved) assert.equal(readFileSync(join(f.agentDir, file), "utf8"), "preserve sentinel\n");
+	assertSuccess(install(f));
+	assert.equal(calls(f).length, 1);
+});
+
+for (const mode of ["fail", "noop", "failAfter"]) {
+	test(`MCP adapter cleanup verifies actual residue after ${mode}`, (t) => {
+		const f = fixture(t, "pi-mcp-adapter");
+		seedOld(f);
+		const result = install(f, { [mode]: true });
+		if (mode === "failAfter") assertSuccess(result);
+		else {
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /MCP adapter.*仍有残留/);
+			assert.ok(existsSync(f.packageDir));
+			assert.equal(JSON.parse(readFileSync(join(f.agentDir, "settings.json"))).packages.includes(f.source), false);
+			assertSuccess(install(f));
+		}
+		assert.equal(existsSync(f.packageDir), false);
+	});
+}
+
+test("MCP cleanup refuses linked npm directories outside the target", (t) => {
+	const f = fixture(t, "pi-mcp-adapter");
+	seedOld(f);
+	const external = join(f.root, "external-npm");
+	mkdirSync(external);
+	writeFileSync(join(external, "sentinel"), "preserve\n");
+	rmSync(join(f.agentDir, "npm"), { recursive: true });
+	symlinkSync(external, join(f.agentDir, "npm"));
+	const result = install(f);
+	assert.notEqual(result.status, 0);
+	assert.match(result.stderr, /Refusing package cleanup through symlink/);
+	assert.deepEqual(calls(f), []);
+	assert.equal(readFileSync(join(external, "sentinel"), "utf8"), "preserve\n");
+});
+
 const SOL_SOURCE = "git:github.com/NVlabs/SoL-Pi";
 const SOL_PACKAGE = "git/github.com/NVlabs/SoL-Pi";
 
@@ -214,7 +271,7 @@ function assertSolRetired(f, files) {
 	}
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
 	assert.equal(settings.packages.includes(SOL_SOURCE), false);
-	assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-sol"));
+	assert.ok(settings.enabledModels.includes("openai-codex/gpt-6.1-sol"));
 	assert.deepEqual(calls(f), []);
 }
 
