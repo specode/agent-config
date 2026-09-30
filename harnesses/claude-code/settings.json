@@ -8,20 +8,12 @@
 	},
 	"enabledPlugins": {
 		"swift-lsp@claude-plugins-official": true,
-		"gopls-lsp@claude-plugins-official": true,
-		"codex@openai-codex": true
-	},
-	"extraKnownMarketplaces": {
-		"openai-codex": {
-			"source": {
-				"source": "github",
-				"repo": "openai/codex-plugin-cc"
-			}
-		}
+		"gopls-lsp@claude-plugins-official": true
 	},
 	"effortLevel": "high",
 	"skipDangerousModePermissionPrompt": true,
 	"theme": "auto",
+	"tui": "fullscreen",
 	"autoCompactEnabled": true,
 	"agentPushNotifEnabled": true
 }

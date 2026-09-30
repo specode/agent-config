@@ -12,8 +12,8 @@
 		{
 			"context": "Scroll",
 			"bindings": {
-				"alt+k": "scroll:lineUp",
-				"alt+j": "scroll:lineDown",
+				"alt+k": "scroll:fullPageUp",
+				"alt+j": "scroll:fullPageDown",
 				"alt+u": "scroll:halfPageUp",
 				"alt+d": "scroll:halfPageDown",
 				"alt+,": "scroll:top",

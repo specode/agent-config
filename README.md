@@ -4,7 +4,7 @@
 
 - **通用规则**：约定 Agent 如何理解需求、修改代码和验证结果。
 - **Pi**：补充子代理、搜索、浏览器操作和会话界面。
-- **Claude Code**：补充语言服务、Codex 插件、快捷键和状态栏。
+- **Claude Code**：补充语言服务、快捷键和状态栏。
 
 本仓库只安装配置与扩展，不安装工具本体，不提供账号或凭据。
 
@@ -35,6 +35,18 @@
 让不同工具遵循同一套协作习惯：简体中文、澄清关键歧义、模块化设计、合理委派、修改后验证。
 
 修改 [`rules/AGENTS.md`](rules/AGENTS.md) 后，运行 `./install-rules.sh`。规则会同时安装到 Agent、Claude Code、Codex、Pi 和 Grok 的用户目录，不修改项目级规则。
+
+**通用 Skills**
+
+Claude Code 与 Pi 的通用技能使用 `npx skills` 统一管理：源文件保存在 `~/.agents/skills/`，两个 harness 的个人 skills 目录链接到同一份内容。当前共用 Remotion、UI/UX Pro Max、TypeSafe AI 和八个 GSAP 技能；插件自带技能和 Claude 的账号同步技能仍由各自来源管理。仓库安装器不安装或更新这些技能。
+
+```bash
+npx skills list -g -a claude-code pi              # 查看共用技能及关联
+npx skills add <来源> -g -a claude-code pi -y      # 同时安装到两个 harness
+npx skills update -g                             # 按记录的来源更新全局技能
+```
+
+Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技能清单不意味着插件专属工具也能跨 harness 使用。
 
 ### Pi
 
@@ -136,7 +148,6 @@
 | --- | --- | --- |
 | Go LSP（`gopls-lsp`） | Go 代码导航与诊断 | 准备语言服务依赖后，让 Agent 查定义、引用或错误 |
 | Swift LSP（`swift-lsp`） | Swift 代码导航与诊断 | 准备语言服务依赖后，在 Swift 项目中使用 |
-| Codex（`codex@openai-codex`） | 接入 Codex 能力 | 完成插件授权后，按插件提供的入口使用 |
 | 自定义状态栏 | 查看当前会话状态 | 自动显示；需要 `jq` |
 
 #### 常用操作与配置
@@ -144,11 +155,11 @@
 | 快捷键 | 操作 |
 | --- | --- |
 | `Ctrl+L` | 打开模型选择器（与 Pi 一致，默认的 `Alt+P` 已解绑） |
-| `Alt+K` / `Alt+J` | 向上／向下滚动一行 |
+| `Alt+K` / `Alt+J` | 向上／向下滚动整页（与 Pi 一致） |
 | `Alt+U` / `Alt+D` | 向上／向下滚动半页 |
 | `Alt+,` / `Alt+.` | 滚动到顶部／底部 |
 
-默认使用自动明暗主题、`high` 思考档位和自动上下文压缩。
+默认使用全屏 TUI、自动明暗主题、`high` 思考档位和自动上下文压缩。用 `/tui` 查看当前渲染模式，`/tui default` 可切回经典模式，`/tui fullscreen` 恢复全屏。
 
 - [基础设置](harnesses/claude-code/settings.json) → `~/.claude/settings.json`
 - [快捷键](harnesses/claude-code/keybindings.json) → `~/.claude/keybindings.json`
