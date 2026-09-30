@@ -84,7 +84,7 @@
 - [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 
-模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai` provider；通过 `/login openai` 选择 Sign in with ChatGPT 使用订阅额度。
+模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。多模型子代理 Profile 中的 GPT 角色也使用该 provider。
 
 **Codemode（Pi 内置）**
 

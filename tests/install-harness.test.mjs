@@ -274,9 +274,9 @@ function assertSolRetired(f, files) {
 	}
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
 	assert.equal(settings.packages.includes(SOL_SOURCE), false);
-	assert.ok(settings.enabledModels.includes("openai/gpt-6-astra"));
-	assert.ok(settings.enabledModels.includes("openai/gpt-6.1-sol"));
-	assert.equal(settings.enabledModels.some((model) => model.startsWith("openai-codex/")), false);
+	assert.ok(settings.enabledModels.includes("openai-codex/gpt-6-astra"));
+	assert.ok(settings.enabledModels.includes("openai-codex/gpt-6.1-sol"));
+	assert.equal(settings.enabledModels.some((model) => model.startsWith("openai/")), false);
 	assert.deepEqual(calls(f), []);
 }
 
