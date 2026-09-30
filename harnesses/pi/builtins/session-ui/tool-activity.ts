@@ -12,10 +12,14 @@ import {
 	textOf,
 	type TextResult,
 } from "./shared.ts";
+import {
+	type ActivityRow,
+	type ActivityStatus,
+	ActivityTree,
+	type CallCount,
+} from "./tool-activity-core.ts";
 
 const WIDGET_ID = "session-ui:tool-activity";
-
-type ActivityStatus = "running" | "done" | "error";
 
 interface ToolActivity {
 	action: string;
@@ -70,6 +74,8 @@ const PRESENTERS: readonly ToolPresenter[] = [
 		ellipsize(stringArg(args, "command") ?? "command", 90),
 	),
 	namedPresenter(["edit", "write"], "Change", (args) => pathDetail(args)),
+	// The script body is not a useful one-line detail; nested calls carry the detail.
+	namedPresenter(["codemode"], "Codemode", () => ""),
 ];
 
 function titleCaseToolName(name: string): string {
@@ -117,21 +123,45 @@ function statusColor(status: ActivityStatus): ThemeColor {
 	return "success";
 }
 
+function plural(count: number, noun: string): string {
+	return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function callCountText(calls: CallCount): string {
+	return calls.failed > 0
+		? `${plural(calls.total, "call")}, ${calls.failed} failed`
+		: plural(calls.total, "call");
+}
+
+function renderRow(row: ActivityRow<ToolActivity>, theme: Theme): string {
+	// Nested rows hang off their top-level call; the group's last row closes the branch.
+	const prefix = row.nested ? theme.fg("dim", `${row.last ? "└" : "├"} `) : "";
+	if (row.kind === "more") {
+		return `${prefix}${theme.fg("dim", `… ${plural(row.count, "earlier call")}`)}`;
+	}
+	const activity = row.value;
+	const detail = activity.detail
+		? ` ${theme.fg("accent", activity.detail)}`
+		: "";
+	const calls =
+		!row.nested && row.calls
+			? theme.fg(row.calls.failed > 0 ? "error" : "dim", ` · ${callCountText(row.calls)}`)
+			: "";
+	const summary = activity.summary
+		? theme.fg(statusColor(activity.status), ` · ${activity.summary}`)
+		: "";
+	return `${prefix}${statusGlyph(theme, activity.status)} ${theme.fg("toolTitle", theme.bold(activity.action))}${detail}${calls}${summary}`;
+}
+
 function renderActivities(
-	activities: readonly ToolActivity[],
+	activities: ActivityTree<ToolActivity>,
 	theme: Theme,
 	width: number,
 	maxItems: number,
 ): string[] {
-	if (activities.length === 0 || width <= 0) return [];
-	const shown = activities.slice(-maxItems);
-	const hidden = activities.length - shown.length;
-	const running = activities.filter(
-		(activity) => activity.status === "running",
-	).length;
-	const failed = activities.filter(
-		(activity) => activity.status === "error",
-	).length;
+	if (width <= 0) return [];
+	const { rows, running, failed, hidden } = activities.layout(maxItems);
+	if (rows.length === 0) return [];
 	const titleParts = [
 		running > 0 ? `${running} running` : "tools",
 		failed > 0 ? `${failed} failed` : "",
@@ -139,15 +169,7 @@ function renderActivities(
 	].filter(Boolean);
 	const lines = [
 		theme.fg("dim", `Activity · ${titleParts.join(" · ")}`),
-		...shown.map((activity) => {
-			const detail = activity.detail
-				? ` ${theme.fg("accent", activity.detail)}`
-				: "";
-			const summary = activity.summary
-				? theme.fg(statusColor(activity.status), ` · ${activity.summary}`)
-				: "";
-			return `${statusGlyph(theme, activity.status)} ${theme.fg("toolTitle", theme.bold(activity.action))}${detail}${summary}`;
-		}),
+		...rows.map((row) => renderRow(row, theme)),
 	];
 	return lines.map((line) => truncateToWidth(line, width));
 }
@@ -170,22 +192,15 @@ export function registerToolActivity(
 	pi: ExtensionAPI,
 	config: SessionUiConfig["toolActivity"],
 ): void {
-	const activities = new Map<string, ToolActivity>();
-	const order: string[] = [];
+	const activities = new ActivityTree<ToolActivity>();
 	let requestRender: (() => void) | undefined;
 	let activeContext: ExtensionContext | undefined;
 
 	const refresh = () => requestRender?.();
 	const reset = () => {
 		activities.clear();
-		order.splice(0, order.length);
 		refresh();
 	};
-	const values = () =>
-		order.flatMap((id) => {
-			const activity = activities.get(id);
-			return activity ? [activity] : [];
-		});
 
 	pi.on("session_start", (_event, ctx) => {
 		activeContext = ctx;
@@ -197,7 +212,7 @@ export function registerToolActivity(
 				requestRender = () => tui.requestRender();
 				return {
 					render: (width: number) =>
-						renderActivities(values(), theme, width, config.maxItems),
+						renderActivities(activities, theme, width, config.maxItems),
 					invalidate() {},
 				};
 			},
@@ -212,11 +227,11 @@ export function registerToolActivity(
 			name,
 			event.args as Record<string, unknown> | undefined,
 		);
-		if (!activities.has(event.toolCallId)) order.push(event.toolCallId);
-		activities.set(event.toolCallId, {
-			...presentation,
-			status: "running",
-		});
+		activities.start(
+			event.toolCallId,
+			{ ...presentation, status: "running" },
+			event.parentToolCallId,
+		);
 		refresh();
 	});
 

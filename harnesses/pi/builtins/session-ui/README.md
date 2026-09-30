@@ -26,7 +26,7 @@
 
 | 功能 | 使用方式 |
 | --- | --- |
-| 工具活动 | 在编辑器附近显示本轮最近的工具执行状态，本轮结束后清空；正式结果仍在对话记录中 |
+| 工具活动 | 在编辑器附近显示本轮最近的工具执行状态，本轮结束后清空；正式结果仍在对话记录中。Codemode 脚本发起的调用缩进显示在该 Codemode 下，Codemode 行显示调用数与失败数 |
 | 工作动画 | 工作时显示动画并更新终端标题；`/work-animation on` 或 `off` 开关，`status` 查询 |
 | 图片预览 | 粘贴图片后，将光标移入图片标签即可预览 |
 | 状态栏 | 显示模型、思考档位、目录、分支、用量等；`/statusline` 临时切换 |
@@ -67,7 +67,7 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | 配置路径 | 可选值／默认值 | 说明 |
 | --- | --- | --- |
 | `toolActivity.placement` | `aboveEditor`（默认）／`belowEditor` | 工具活动位置 |
-| `toolActivity.maxItems` | 1–20；默认 6 | 最近工具展示数量 |
+| `toolActivity.maxItems` | 1–20；默认 6 | 最多展示行数：先展示最近的顶层调用，剩余行数给嵌套调用，较早的嵌套调用折叠为一行 |
 | `workAnimation.placement` | `aboveEditor`（默认）／`belowEditor` | 工作动画位置 |
 | `workAnimation.intervalMs` | 100–500；默认 180 | 动画刷新间隔，单位毫秒 |
 | `statusline.overflow` | `drop-right`（默认）／`priority` | 空间不足时从右侧隐藏，或先压缩再按优先级隐藏 |
