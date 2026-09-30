@@ -25,7 +25,7 @@
 **安装前注意：**
 
 - 配置不会与现有设置逐项合并。
-- Pi 默认开启 Fast（Codex 与 Grok 4.7），可能增加额度消耗。
+- Pi 的 Fast 默认关闭，支持 OpenAI／Codex 订阅与 Grok 4.7；开启可能增加额度消耗。
 - Claude Code 默认使用 `auto` 权限模式。
 
 ## 使用说明
@@ -66,7 +66,7 @@
 | 插件 | 用途 | 怎么用 |
 | --- | --- | --- |
 | [session-ui](harnesses/pi/builtins/session-ui/README.md) | 工具活动、图片预览、状态栏与自动标题 | 自动生效；`/effort` 选思考档位，`/statusline` 切换状态栏 |
-| [Fast](harnesses/pi/builtins/fast/README.md) | Codex 尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
+| [Fast](harnesses/pi/builtins/fast/README.md) | OpenAI／Codex 订阅尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
 | `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
 | `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
@@ -84,7 +84,7 @@
 - [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 
-模型列入清单不代表账号已获授权，仍需登录对应 provider。
+模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai` provider；通过 `/login openai` 选择 Sign in with ChatGPT 使用订阅额度。
 
 **Codemode（Pi 内置）**
 

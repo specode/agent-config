@@ -1,12 +1,12 @@
 # Fast
 
-一个可独立使用的 Pi 扩展，用同一个 `/fast` 开关尝试提高当前模型的请求优先级。Codex 订阅请求添加 priority 档位；Grok 4.7 改走 Grok Build 代理的 fast 通道。
+一个可独立使用的 Pi 扩展，用同一个 `/fast` 开关尝试提高当前模型的请求优先级。OpenAI 与 Codex 的 ChatGPT 订阅请求添加 priority 档位；Grok 4.7 改走 Grok Build 代理的 fast 通道。
 
 **默认关闭。Fast 可能增加额度消耗，启用不代表后端已确认加速。** 不依赖自定义状态栏或其他扩展。
 
 ## 快速开始
 
-先安装 Pi。Codex 需要通过 `/login` 完成 ChatGPT OAuth；Grok 4.7 需要 xAI OAuth，不能使用 API key。
+先安装支持 ChatGPT 订阅登录的新版 Pi。OpenAI 通过 `/login openai` 选择 **Sign in with ChatGPT**；Codex 通过 `/login` 完成其 ChatGPT OAuth；Grok 4.7 需要 xAI OAuth。Fast 不适用于 API key。
 
 获取本目录的完整源码后，安装本地扩展：
 
@@ -39,7 +39,7 @@ pi install /absolute/path/to/fast/index.ts
 
 命令只回一行：`Fast: on` 或 `Fast: off`。当前模型不适用时不切换，直接回 `Fast: unavailable (原因)`，原因是模型、API 或认证不满足。只有在切换没有真正落地时才会追加说明：`applies from the next turn`（当前回合还在生成）、`this session only (switch not saved)`（状态文件写不进去）、`not applied (...)`（传输切换失败）。
 
-开关**按 provider 记忆并立即保存**，reload、新建会话、重启 Pi 之后仍然有效。`openai-codex` 和 `xai` 各自独立：关掉 Codex 不影响 Grok。没有 Fast 策略的 provider 拒绝切换，也不写入状态。
+开关**按 provider 记忆并立即保存**，reload、新建会话、重启 Pi 之后仍然有效。`openai`、`openai-codex` 和 `xai` 各自独立：关掉 Codex 不影响 OpenAI 或 Grok，Codex 的已保存开关也不会自动迁移给 OpenAI。没有 Fast 策略的 provider 拒绝切换，也不写入状态。
 
 开启且当前通道符合条件时，状态栏显示 `fast`；Grok 只在代理传输已经装上后显示。关闭或不适配时隐藏。自定义状态栏可能不展示该标记，以 `/fast status` 为准。
 
@@ -71,9 +71,16 @@ provider 开着但当前模型不适用时（例如 `xai/grok-4.6`，或掉了 O
 
 ## 适用范围与限制
 
-### Codex
+### OpenAI 与 Codex
 
-按 provider 生效，不设模型白名单：只要是 `openai-codex` provider 的 `openai-codex-responses` API，并且使用 ChatGPT OAuth，就适用；API-key 认证不适用。
+按 provider 生效，不设模型白名单，但必须使用 ChatGPT OAuth，且 provider 与 API 配对：
+
+| Provider | API | 登录方式 |
+| --- | --- | --- |
+| `openai` | `openai-responses` | OpenAI 的 Sign in with ChatGPT 订阅登录 |
+| `openai-codex` | `openai-codex-responses` | Codex 的 ChatGPT OAuth |
+
+API-key 认证、`openai-completions` 和其他兼容 provider 不适用。OpenAI 订阅认证与请求传输交给 Pi，本扩展不切换到 Codex 端点，也不修改认证头。
 
 请求未指定服务档位时，扩展添加 `service_tier: "priority"`；已有档位时保持原样。因此 `/fast off` 只停止本扩展添加档位，不保证其他来源没有启用 priority。不修改所选模型。
 
@@ -91,4 +98,4 @@ Pi 会按该模型上的 2 倍目录价格估算费用；这不是服务端账�
 
 如果请求仍指向公开 API，扩展不会把 fast 模型名写进去，避免把一个公开 API 不接受的模型发出去。
 
-两种通道都不额外调用网络，也不增加重试或自动降级。Pi 当前的扩展接口读不到响应体里的 `service_tier`，无法确认后端最终是否加速，`Fast: on` 只表示开关已开启且本地处理已生效。不要把它、`fast` 标记、响应速度或成功请求当作加速确认。
+所有通道都不额外调用网络，也不增加重试或自动降级。本扩展不核验响应里的实际服务档位，无法确认后端最终是否加速，`Fast: on` 只表示开关已开启且本地处理已生效。不要把它、`fast` 标记、响应速度或成功请求当作加速确认。

@@ -9,6 +9,8 @@ const STATUS_KEY = "fast";
 const USAGE = "Usage: /fast [on|off|status]";
 const CODEX_PROVIDER = "openai-codex";
 const CODEX_API = "openai-codex-responses";
+const OPENAI_PROVIDER = "openai";
+const OPENAI_API = "openai-responses";
 const GROK_PROVIDER = "xai";
 const GROK_API = "openai-responses";
 const GROK_BASE_ID = "grok-4.7";
@@ -181,7 +183,9 @@ function saveSwitch(path: string, provider: string, enabled: boolean): Switches 
 /** Providers with a fast strategy; the switch is stored per provider, not per model. */
 function switchKey(ctx: ExtensionContext): string | undefined {
 	const provider = ctx.model?.provider;
-	return provider === CODEX_PROVIDER || provider === GROK_PROVIDER
+	return provider === CODEX_PROVIDER ||
+		provider === OPENAI_PROVIDER ||
+		provider === GROK_PROVIDER
 		? provider
 		: undefined;
 }
@@ -270,9 +274,9 @@ function transportActive(
 function modelReason(ctx: ExtensionContext): string | undefined {
 	const model = ctx.model as ModelLike | undefined;
 	if (!model) return "no model selected";
-	if (model.provider === CODEX_PROVIDER) {
-		if (model.api !== CODEX_API)
-			return "requires the openai-codex-responses API";
+	if (model.provider === CODEX_PROVIDER || model.provider === OPENAI_PROVIDER) {
+		const api = model.provider === CODEX_PROVIDER ? CODEX_API : OPENAI_API;
+		if (model.api !== api) return `requires the ${api} API`;
 		if (!ctx.modelRegistry.isUsingOAuth(ctx.model!))
 			return "requires ChatGPT OAuth, not API-key auth";
 		return undefined;
@@ -359,6 +363,7 @@ function updateStatus(ctx: ExtensionContext, state: State): void {
 		switchOn(ctx, state) &&
 		!inactiveReason(ctx, state) &&
 		(model?.provider === CODEX_PROVIDER ||
+			model?.provider === OPENAI_PROVIDER ||
 			transportActive(model, state.config.grokClientVersion));
 	ctx.ui.setStatus(STATUS_KEY, active ? "fast" : undefined);
 }
@@ -377,7 +382,7 @@ function applyRequest(
 			return { ...payload, model: GROK_BASE_ID };
 		return undefined;
 	}
-	if (model?.provider === CODEX_PROVIDER) {
+	if (model?.provider === CODEX_PROVIDER || model?.provider === OPENAI_PROVIDER) {
 		if (!isRecord(payload) || payload.model !== model.id) return undefined;
 		if ("service_tier" in payload) return undefined;
 		return { ...payload, service_tier: "priority" };
@@ -554,7 +559,7 @@ export function registerFast(
 
 	pi.registerCommand("fast", {
 		description:
-			"Toggle Fast for the current model: /fast [on|off|status]. Codex adds service_tier; only Grok 4.7 uses the Build proxy",
+			"Toggle Fast for the current model: /fast [on|off|status]. OpenAI/Codex OAuth adds service_tier; only Grok 4.7 uses the Build proxy",
 		getArgumentCompletions: (prefix) =>
 			["on", "off", "status"]
 				.filter((value) => value.startsWith(prefix))

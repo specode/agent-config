@@ -178,44 +178,118 @@ async function harness(
 	};
 }
 
-for (const model of [
-	"gpt-5.4",
-	"gpt-5.5",
-	"gpt-6",
-	"gpt-6-astra",
-	"future-model",
-]) {
-	test(`injects priority without a model allowlist: ${model}`, async (t) => {
+for (const [provider, api] of [
+	["openai-codex", "openai-codex-responses"],
+	["openai", "openai-responses"],
+] as const) {
+	for (const model of [
+		"gpt-5.4",
+		"gpt-5.5",
+		"gpt-6",
+		"gpt-6-astra",
+		"future-model",
+	]) {
+		test(`injects priority without a model allowlist: ${provider}/${model}`, async (t) => {
+			const h = await harness(t);
+			h.ctx.model = { ...h.ctx.model!, id: model, provider, api };
+			await h.emit("model_select");
+			const payload = Object.freeze({
+				model,
+				reasoning: { effort: "high" },
+				input: [],
+			});
+			assert.deepEqual(h.request(payload), {
+				...payload,
+				service_tier: "priority",
+			});
+			assert.equal("service_tier" in payload, false);
+			assert.equal(h.footer(), "fast");
+			assert.equal(h.switches().length, 0);
+		});
+	}
+
+	for (const tier of ["auto", "default", "priority", "flex", null, undefined]) {
+		test(`${provider} preserves existing service_tier including ${tier}`, async (t) => {
+			const h = await harness(t);
+			h.ctx.model = { ...h.ctx.model!, provider, api };
+			await h.emit("model_select");
+			const payload = Object.freeze({ model: h.ctx.model!.id, service_tier: tier });
+			assert.equal(h.request(payload), undefined);
+			assert.equal(payload.service_tier, tier);
+			assert.equal(h.footer(), "fast");
+			await h.command("off");
+			assert.equal(h.request(payload), undefined);
+			assert.equal("service_tier" in payload, true);
+			assert.equal(payload.service_tier, tier);
+		});
+	}
+}
+
+for (const api of ["openai-completions", "openai-codex-responses"] as const) {
+	test(`OpenAI rejects unsupported API: ${api}`, async (t) => {
 		const h = await harness(t);
-		h.ctx.model!.id = model;
-		const payload = Object.freeze({
-			model,
-			reasoning: { effort: "high" },
-			input: [],
-		});
-		assert.deepEqual(h.request(payload), {
-			...payload,
-			service_tier: "priority",
-		});
-		assert.equal("service_tier" in payload, false);
-		assert.equal(h.footer(), "fast");
-		assert.equal(h.switches().length, 0);
+		h.ctx.model = { ...h.ctx.model!, provider: "openai", api };
+		await h.emit("model_select");
+		await h.command("on");
+		assert.equal(h.notices.at(-1), "Fast: unavailable (requires the openai-responses API)");
+		assert.equal(h.request(), undefined);
+		assert.equal(h.footer(), undefined);
+		assert.equal(h.state(), undefined);
 	});
 }
 
-for (const tier of ["auto", "default", "priority", "flex", null, undefined]) {
-	test(`preserves existing service_tier including ${tier}`, async (t) => {
-		const h = await harness(t);
-		const payload = Object.freeze({ model: h.ctx.model!.id, service_tier: tier });
-		assert.equal(h.request(payload), undefined);
-		assert.equal(payload.service_tier, tier);
-		assert.equal(h.footer(), "fast");
-		await h.command("off");
-		assert.equal(h.request(payload), undefined);
-		assert.equal("service_tier" in payload, true);
-		assert.equal(payload.service_tier, tier);
-	});
-}
+test("OpenAI rejects API-key auth and clears a stale OAuth switch", async (t) => {
+	const h = await harness(t, { enabled: false });
+	h.ctx.model = { ...h.ctx.model!, provider: "openai", api: "openai-responses" };
+	await h.command("on");
+	assert.equal(h.footer(), "fast");
+	h.ctx.modelRegistry.isUsingOAuth = () => false;
+	await h.emit("model_select");
+	assert.equal(h.request(), undefined);
+	assert.equal(h.footer(), undefined);
+	await h.command("on");
+	assert.equal(h.notices.at(-1), "Fast: unavailable (requires ChatGPT OAuth, not API-key auth)");
+	assert.equal(h.state()?.providers.openai.enabled, false);
+	h.ctx.modelRegistry.isUsingOAuth = () => true;
+	await h.emit("model_select");
+	assert.equal(h.request(), undefined);
+	await h.command("on");
+	assert.ok(h.request());
+	assert.equal(h.switches().length, 0);
+});
+
+test("OpenAI remembers its switch independently of Codex across sessions", async (t) => {
+	const h = await harness(t, { enabled: false });
+	const codex = { ...h.ctx.model! };
+	const openai = { ...codex, provider: "openai", api: "openai-responses" } as Model;
+	h.ctx.model = openai;
+	await h.emit("model_select");
+	assert.equal(h.request(), undefined);
+	await h.command("on");
+	assert.equal(h.notices.at(-1), "Fast: on");
+	assert.equal(h.state()?.providers.openai.enabled, true);
+	assert.equal(h.request({ model: "another-model" }), undefined);
+	assert.equal(h.request(null), undefined);
+	h.ctx.model = codex;
+	await h.emit("model_select");
+	assert.equal(h.footer(), undefined);
+	assert.equal(h.request(), undefined);
+	await h.command("off");
+	assert.equal(h.state()?.providers["openai-codex"].enabled, false);
+	assert.equal(h.state()?.providers.openai.enabled, true);
+	await h.emit("session_shutdown");
+	h.ctx.sessionManager = {} as ExtensionContext["sessionManager"];
+	h.ctx.model = openai;
+	await h.emit("session_start");
+	assert.equal(h.footer(), "fast");
+	assert.deepEqual(h.request(), { model: openai.id, service_tier: "priority" });
+	await h.command("status");
+	assert.equal(h.notices.at(-1), "Fast: on");
+	await h.command("off");
+	assert.equal(h.footer(), undefined);
+	assert.equal(h.request(), undefined);
+	assert.equal(h.switches().length, 0);
+});
 
 test("checks provider, API, auth, and missing model", async (t) => {
 	const h = await harness(t);

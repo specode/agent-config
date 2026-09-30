@@ -1,8 +1,8 @@
 {
 	"theme": "system",
 	"enabledModels": [
-		"openai-codex/gpt-6-astra",
-		"openai-codex/gpt-6.1-sol",
+		"openai/gpt-6-astra",
+		"openai/gpt-6.1-sol",
 		"xai/grok-4.7",
 		"kimi-coding/k3",
 		"antigravity/gemini-3.8-flash",
