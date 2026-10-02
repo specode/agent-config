@@ -29,7 +29,6 @@ export function phaseForTool(toolName: string): string {
 	if (name.includes("diagnostic") || name.includes("lsp")) {
 		return "Checking code...";
 	}
-	if (name.includes("subagent")) return "Coordinating...";
 	if (name.includes("image")) return "Processing image...";
 	const safeName =
 		toolName.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24) || "tool";

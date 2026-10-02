@@ -3,7 +3,7 @@
 个人 AI 编程工具配置，统一协作规则，并为 Pi、Claude Code 补齐代码导航、任务协作和界面能力。
 
 - **通用规则**：约定 Agent 如何理解需求、修改代码和验证结果。
-- **Pi**：补充子代理、搜索、浏览器操作和会话界面。
+- **Pi**：补充结构化提问、搜索、浏览器操作和会话界面。
 - **Claude Code**：补充语言服务、快捷键和状态栏。
 
 本仓库只安装配置与扩展，不安装工具本体，不提供账号或凭据。
@@ -52,7 +52,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 
 #### 解决什么问题
 
-- **任务协作**：拆分独立任务，让 Agent 在关键决策处提问。
+- **任务协作**：让 Agent 在关键决策处通过结构化选项提问。
 - **信息获取**：搜索代码与网页，操作真实浏览器或桌面。
 - **会话体验**：看清执行状态、模型档位和用量，减少重复设置。
 
@@ -64,7 +64,6 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 
 | 插件 | 用途 | 使用示例／入口 |
 | --- | --- | --- |
-| `pi-subagents` | 子代理分工 | “并行分析这两个模块，再汇总结论” |
 | `rpiv-ask-user-question` | 结构化提问 | 需要选择方案时，在选项界面作答 |
 | `pi-lens` | 代码分析与导航 | “查找这个函数的定义和调用方” |
 | `pi-fff` | 文件与内容搜索 | “找到登录相关文件” |
@@ -96,7 +95,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 - [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 
-模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。多模型子代理 Profile 中的 GPT 角色也使用该 provider。
+模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。
 
 **Codemode（Pi 内置）**
 
@@ -120,21 +119,15 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 - 关闭 Fast：在 Pi 里对该 provider 执行 `/fast off`，选择保存在 `~/.pi/agent/state/fast.json`。`~/.pi/agent/extensions/fast.json` 的 `enabled` 只是还没设过开关时的默认值。
 - `fast` 标记只表示开关已启用并已装上，不代表后端已确认加速。
 
-**子代理与搜索**
+**搜索**
 
 按需调整以下配置，无需为了日常使用逐项修改。
 
 | 配置 | 安装后位置 |
 | --- | --- |
-| [子代理策略](harnesses/pi/plugin-configs/pi-subagents/config.json) | `~/.pi/agent/extensions/subagent/config.json` |
 | [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) | `~/.pi/agent/web-search.json` |
 | [代码分析](harnesses/pi/plugin-configs/pi-lens/config.json) | `~/.pi-lens/config.json` |
 | [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) | `~/.pi/agent/pi-fff.json` |
-
-额外提供[多模型子代理 Profile](harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json)，默认不激活。
-安装位置为 `~/.pi/agent/profiles/pi-subagents/multimodel.json`。先登录相关 provider，再通过 `/subagents-load-profile multimodel` 选择该 Profile。
-
-该 Profile 按角色分配 GPT 与 Grok，并让 pi-subagents 内置的 Claude Code 子代理参与分工：`claude-code` 作只读的交叉意见，`claude-code-writer` 作第二个 worker。二者通过本机 `claude` CLI 运行，模型与思考强度取自 `~/.claude/settings.json`，需先登录 Claude Code。`claude-code` 没有文件与命令权限，只分析交给它的内容；`claude-code-writer` 只能读写文件、不能运行命令，改动需由主会话或 `worker` 验证。
 
 ### Claude Code
 

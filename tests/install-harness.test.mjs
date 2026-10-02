@@ -149,8 +149,6 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"builtins/fast/index.ts": ".pi/agent/extensions/fast/index.ts",
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
-		"plugin-configs/pi-subagents/config.json": ".pi/agent/extensions/subagent/config.json",
-		"plugin-configs/pi-subagents/profiles/multimodel.json": ".pi/agent/profiles/pi-subagents/multimodel.json",
 		"plugin-configs/pi-lens/config.json": ".pi-lens/config.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
@@ -168,6 +166,12 @@ test("maps the three source categories to Pi runtime paths without installing in
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.equal(settings.theme, "system");
 	assert.deepEqual(settings.defaultTools, ["+codemode"]);
+	assert.equal(settings.packages.includes("npm:pi-subagents"), false);
+	assert.equal(Object.hasOwn(settings, "subagents"), false);
+	for (const path of ["extensions/subagent", "profiles/pi-subagents", "pi-subagents"]) {
+		assert.equal(existsSync(join(f.agentDir, path)), false, path);
+	}
+	assert.equal(existsSync(join(ROOT, "harnesses/pi/plugin-configs/pi-subagents")), false);
 	assert.equal(existsSync(join(f.root, "unrelated-agent")), false);
 	assertSuccess(install(f));
 	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
@@ -549,48 +553,115 @@ process.exit(result.status ?? 1);
 	assert.equal(existsSync(join(target, "index.ts")), true);
 });
 
-test("fresh and repeat installs copy the multimodel profile without activating it", (t) => {
-	const f = fixture(t);
-	const relativePath = "profiles/pi-subagents/multimodel.json";
-	const source = readFileSync(
-		join(ROOT, "harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json"),
-		"utf8",
-	);
-	for (let attempt = 0; attempt < 2; attempt += 1) {
-		assertSuccess(install(f));
-		assert.equal(readFileSync(join(f.agentDir, relativePath), "utf8"), source);
-		const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json")));
-		assert.equal(Object.hasOwn(settings, "subagents"), false);
-		assert.equal(
-			existsSync(
-				join(f.agentDir, "profiles/pi-subagents/three-model-context-first.json"),
-			),
-			false,
-		);
+function seedSubagentConfigs(f) {
+	const files = {
+		"extensions/subagent/config.json": '{"timeoutMs":7200000}\n',
+		"profiles/pi-subagents/multimodel.json": '{"subagents":{"agentOverrides":{}}}\n',
+		"profiles/pi-subagents/multimodel-ggk.json": "old profile\n",
+		"pi-subagents/last-seen-version.json": '{"version":"0.74.0"}\n',
+	};
+	for (const [relative, content] of Object.entries(files)) {
+		const path = join(f.agentDir, relative);
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, content);
 	}
+	return files;
+}
+
+test("retires subagents and multimodel profiles with consent and recoverable backups", (t) => {
+	const f = fixture(t, "pi-subagents");
+	assertSuccess(install(f));
+	seedOld(f);
+	const files = seedSubagentConfigs(f);
+	const settingsPath = join(f.agentDir, "settings.json");
+	const settings = JSON.parse(readFileSync(settingsPath));
+	settings.subagents = { agentOverrides: { worker: { model: "test/model" } } };
+	writeFileSync(settingsPath, JSON.stringify(settings));
+	const oldSettings = readFileSync(settingsPath, "utf8");
+	const preserved = [
+		"extensions/custom/index.ts", "profiles/custom/profile.json", "auth.json",
+		"sessions/project/child/run-0/session.jsonl", "missions/history.json",
+	];
+	for (const path of preserved) {
+		mkdirSync(dirname(join(f.agentDir, path)), { recursive: true });
+		writeFileSync(join(f.agentDir, path), "preserve sentinel\n");
+	}
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(settingsPath, "utf8"), oldSettings);
+	for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), content);
+	assert.ok(existsSync(f.packageDir));
+	assert.deepEqual(calls(f), []);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+
+	assertSuccess(install(f));
+	assert.equal(existsSync(f.packageDir), false);
+	assert.equal(calls(f).length, 1);
+	const root = join(f.home, ".agent-config-backups");
+	const backups = readdirSync(root);
+	assert.equal(backups.length, 1);
+	const backup = join(root, backups[0]);
+	for (const [path, content] of Object.entries(files)) {
+		assert.equal(existsSync(join(f.agentDir, path)), false);
+		assert.equal(readFileSync(join(backup, "pi/.pi/agent", path), "utf8"), content);
+	}
+	assert.equal(readFileSync(join(backup, "pi/.pi/agent/settings.json"), "utf8"), oldSettings);
+	const packageBackup = join(backup, "pi-retired/subagents-package");
+	assert.equal(readFileSync(join(packageBackup, "previous-package/index.ts"), "utf8"), "old plugin fixture\n");
+	assert.ok(JSON.parse(readFileSync(join(packageBackup, "package.json"))).dependencies["pi-subagents"]);
+	assert.ok(existsSync(join(packageBackup, "package-lock.json")));
+	assert.equal(Object.hasOwn(JSON.parse(readFileSync(settingsPath)), "subagents"), false);
+	for (const path of preserved) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), "preserve sentinel\n");
+	assertSuccess(install(f));
+	assert.deepEqual(readdirSync(root), backups);
+	assert.equal(calls(f).length, 1);
+});
+
+test("retires orphaned subagent configs only after consent without requiring an installed package", (t) => {
+	const f = fixture(t, "pi-subagents");
+	assertSuccess(install(f));
+	const files = seedSubagentConfigs(f);
+	assertSuccess(install(f, { input: "n\n" }));
+	for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), content);
+	assertSuccess(install(f));
+	for (const path of Object.keys(files)) assert.equal(existsSync(join(f.agentDir, path)), false);
 	assert.deepEqual(calls(f), []);
 });
 
-test("renamed multimodel profile retires the old profile only after consent with a backup", (t) => {
-	const f = fixture(t);
-	assertSuccess(install(f));
-	const legacyProfile = join(f.agentDir, "profiles/pi-subagents/multimodel-ggk.json");
-	writeFileSync(legacyProfile, "old profile\n");
-	assertSuccess(install(f, { input: "n\n" }));
-	assert.equal(readFileSync(legacyProfile, "utf8"), "old profile\n");
-	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
-	const result = install(f);
-	assertSuccess(result);
-	assert.match(result.stdout, /移除配置：多模型 Profile 旧文件/);
-	assert.equal(existsSync(legacyProfile), false);
-	assert.ok(existsSync(join(f.agentDir, "profiles/pi-subagents/multimodel.json")));
-	const backups = readdirSync(join(f.home, ".agent-config-backups"));
-	assert.equal(backups.length, 1);
-	assert.equal(
-		readFileSync(join(f.home, ".agent-config-backups", backups[0], "pi/.pi/agent/profiles/pi-subagents/multimodel-ggk.json"), "utf8"),
-		"old profile\n",
-	);
-});
+for (const mode of ["fail", "noop", "failAfter"]) {
+	test(`subagent uninstall verifies residue after ${mode} and can be retried`, (t) => {
+		const f = fixture(t, "pi-subagents");
+		seedOld(f);
+		const result = install(f, { [mode]: true });
+		if (mode === "failAfter") assertSuccess(result);
+		else {
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /pi-subagents.*仍有残留/);
+			assert.ok(existsSync(f.packageDir));
+			assert.equal(JSON.parse(readFileSync(join(f.agentDir, "settings.json"))).packages.includes(f.source), false);
+			assertSuccess(install(f));
+		}
+		assert.equal(existsSync(f.packageDir), false);
+	});
+}
+
+for (const phase of ["backup", "install"]) {
+	test(`restores subagent configs and profiles when ${phase} fails without uninstalling the package`, (t) => {
+		const f = fixture(t, "pi-subagents");
+		assertSuccess(install(f));
+		seedOld(f);
+		const files = seedSubagentConfigs(f);
+		const oldSettings = readFileSync(join(f.agentDir, "settings.json"), "utf8");
+		interceptMove(f, phase === "backup"
+			? `args[0] === ${JSON.stringify(join(f.agentDir, "profiles/pi-subagents"))}`
+			: `args.at(-1) === ${JSON.stringify(join(f.agentDir, "extensions/session-ui"))}`);
+		const result = install(f);
+		assert.notEqual(result.status, 0);
+		for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), content);
+		assert.equal(readFileSync(join(f.agentDir, "settings.json"), "utf8"), oldSettings);
+		assert.ok(existsSync(f.packageDir));
+		assert.deepEqual(calls(f), []);
+	});
+}
 
 test("fresh and repeat installs deploy FFF config into the target agent directory", (t) => {
 	const f = fixture(t);

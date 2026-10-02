@@ -9,7 +9,7 @@ test("phaseForTool maps common tool families", () => {
 	assert.equal(phaseForTool("read"), "Reading...");
 	assert.equal(phaseForTool("web_search"), "Searching...");
 	assert.equal(phaseForTool("lsp_diagnostics"), "Checking code...");
-	assert.equal(phaseForTool("subagent"), "Coordinating...");
+	assert.equal(phaseForTool("bash"), "Running command...");
 	assert.equal(phaseForTool("generate_image"), "Processing image...");
 	assert.equal(phaseForTool("@@@"), "Using tool...");
 });

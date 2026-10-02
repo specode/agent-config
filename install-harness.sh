@@ -311,9 +311,9 @@ pi)
 			'-|.pi/agent/extensions/openai-fast.json|absent|-|配置|OpenAI Fast 旧配置' \
 			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|插件|Fast' \
 			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
-			'harnesses/pi/plugin-configs/pi-subagents/config.json|.pi/agent/extensions/subagent/config.json|file|-|配置|子代理策略' \
-			'-|.pi/agent/profiles/pi-subagents/multimodel-ggk.json|absent|-|配置|多模型 Profile 旧文件' \
-			'harnesses/pi/plugin-configs/pi-subagents/profiles/multimodel.json|.pi/agent/profiles/pi-subagents/multimodel.json|file|-|配置|多模型 Profile' \
+			'-|.pi/agent/extensions/subagent|absent|-|配置|子代理策略' \
+			'-|.pi/agent/profiles/pi-subagents|absent|-|配置|子代理 Profile' \
+			'-|.pi/agent/pi-subagents|absent|-|配置|子代理版本状态' \
 			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
 			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
 			'harnesses/pi/plugin-configs/pi-lens/config.json|.pi-lens/config.json|file|-|配置|Pi Lens'
@@ -351,6 +351,7 @@ if [ "$HARNESS_ID" = 'pi' ]; then
 	retire_removed_pi_image_gen
 	retire_removed_pi_package '@diegopetrucci/pi-openai-fast' 'OpenAI Fast' 'openai-fast-package'
 	retire_removed_pi_package 'pi-mcp-adapter' 'MCP adapter' 'mcp-adapter-package'
+	retire_removed_pi_package 'pi-subagents' 'pi-subagents' 'subagents-package'
 	retire_legacy_pi_web_search
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
