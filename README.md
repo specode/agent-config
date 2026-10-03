@@ -154,7 +154,7 @@ Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravi
 | `Alt+U` / `Alt+D` | 向上／向下滚动半页 |
 | `Alt+,` / `Alt+.` | 滚动到顶部／底部 |
 
-默认使用全屏 TUI、自动明暗主题、`high` 思考档位和自动上下文压缩。用 `/tui` 查看当前渲染模式，`/tui default` 可切回经典模式，`/tui fullscreen` 恢复全屏。
+默认使用全屏 TUI、自动明暗主题、`high` 思考档位和自动上下文压缩，关闭反馈草稿（`feedbackDrafts: "off"`）。用 `/tui` 查看当前渲染模式，`/tui default` 可切回经典模式，`/tui fullscreen` 恢复全屏。
 
 - [基础设置](harnesses/claude-code/settings.json) → `~/.claude/settings.json`
 - [快捷键](harnesses/claude-code/keybindings.json) → `~/.claude/keybindings.json`

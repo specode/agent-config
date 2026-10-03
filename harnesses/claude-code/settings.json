@@ -15,5 +15,6 @@
 	"theme": "auto",
 	"tui": "fullscreen",
 	"autoCompactEnabled": true,
-	"agentPushNotifEnabled": true
+	"agentPushNotifEnabled": true,
+	"feedbackDrafts": "off"
 }

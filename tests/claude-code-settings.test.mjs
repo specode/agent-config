@@ -13,6 +13,13 @@ test("Claude Code enables language servers without the Codex plugin or marketpla
 	assert.equal(Object.hasOwn(settings.extraKnownMarketplaces ?? {}, "openai-codex"), false);
 });
 
+test("Claude Code disables feedback drafts", () => {
+	const settings = JSON.parse(
+		readFileSync(new URL("../harnesses/claude-code/settings.json", import.meta.url), "utf8"),
+	);
+	assert.equal(settings.feedbackDrafts, "off");
+});
+
 test("Claude Code aligns model selection and full-page scrolling with Pi", () => {
 	const keys = JSON.parse(
 		readFileSync(new URL("../harnesses/claude-code/keybindings.json", import.meta.url), "utf8"),
