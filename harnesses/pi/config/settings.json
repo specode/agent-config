@@ -5,7 +5,8 @@
 		"openai-codex/gpt-6.1-sol",
 		"xai/grok-4.7",
 		"antigravity/gemini-3.8-flash",
-		"antigravity/claude-opus-4-6"
+		"antigravity/claude-opus-5-5",
+		"antigravity/claude-sonnet-5-5"
 	],
 	"defaultTools": ["+codemode"],
 	"externalEditor": "nvim",

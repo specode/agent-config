@@ -69,6 +69,17 @@ if (process.env.PI_TEST_REMOVE_NONZERO_AFTER === "1") process.exit(1);
 	};
 }
 
+test("installs the current Antigravity Claude model selection", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
+	assert.deepEqual(
+		settings.enabledModels.filter((model) => model.startsWith("antigravity/claude-")),
+		["antigravity/claude-opus-5-5", "antigravity/claude-sonnet-5-5"],
+	);
+	assert.ok(settings.enabledModels.includes("antigravity/gemini-3.8-flash"));
+});
+
 function seedOld(f, { directory = true, declaration = true } = {}) {
 	mkdirSync(join(f.agentDir, "npm"), { recursive: true });
 	const settings = JSON.parse(

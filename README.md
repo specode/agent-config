@@ -95,6 +95,8 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 - [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 
+Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravity.refresh` 刷新服务端模型目录，再用 `/model` 选择。
+
 模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。
 
 **Codemode（Pi 内置）**
