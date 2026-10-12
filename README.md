@@ -94,6 +94,9 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 
 - [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
+- [模型覆盖](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`
+
+模型覆盖仅将 `openai-codex` 的 `gpt-6-astra` 和 `gpt-6.1-sol` 上下文预算设为 500K tokens，不改其他模型和输出上限。这是 Pi 本地预算，不保证后端支持同等窗口；超出后端限制可能报错。安装器整文件托管 `models.json`，已有自定义模型配置须在确认覆盖前自行整合。
 
 Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravity.refresh` 刷新服务端模型目录，再用 `/model` 选择。
 

@@ -80,6 +80,36 @@ test("installs the current Antigravity Claude model selection", (t) => {
 	assert.ok(settings.enabledModels.includes("antigravity/gemini-3.8-flash"));
 });
 
+test("installs only the two requested Codex context overrides", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const target = join(f.agentDir, "models.json");
+	assert.equal(lstatSync(target).isSymbolicLink(), false);
+	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), {
+		providers: {
+			"openai-codex": {
+				modelOverrides: {
+					"gpt-6-astra": { contextWindow: 500000 },
+					"gpt-6.1-sol": { contextWindow: 500000 },
+				},
+			},
+		},
+	});
+});
+
+test("model overrides require consent and back up the complete previous file", (t) => {
+	const f = fixture(t);
+	const target = join(f.agentDir, "models.json");
+	const previous = '{"providers":{"custom":{"models":[{"id":"local"}]}}}\n';
+	writeFileSync(target, previous);
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(target, "utf8"), previous);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assertSuccess(install(f));
+	assert.equal(readFileSync(join(solBackup(f), "models.json"), "utf8"), previous);
+	assert.equal(readFileSync(target, "utf8"), readFileSync(join(ROOT, "harnesses/pi/config/models.json"), "utf8"));
+});
+
 function seedOld(f, { directory = true, declaration = true } = {}) {
 	mkdirSync(join(f.agentDir, "npm"), { recursive: true });
 	const settings = JSON.parse(
@@ -154,6 +184,7 @@ test("maps the three source categories to Pi runtime paths without installing in
 	assertSuccess(install(f));
 	const files = {
 		"config/settings.json": ".pi/agent/settings.json",
+		"config/models.json": ".pi/agent/models.json",
 		"config/keybindings.json": ".pi/agent/keybindings.json",
 		"builtins/session-ui/index.ts": ".pi/agent/extensions/session-ui/index.ts",
 		"builtins/session-ui/config.ts": ".pi/agent/extensions/session-ui/config.ts",
@@ -528,9 +559,11 @@ test("replaces managed plugin directories only after consent and backs up obsole
 	assert.deepEqual(readdirSync(backupRoot), backups);
 });
 
-test("rolls back both code and composed config if deployment fails", (t) => {
+test("rolls back models, code and composed config if deployment fails", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
+	const oldModels = '{"providers":{}}\n';
+	writeFileSync(join(f.agentDir, "models.json"), oldModels);
 	const target = join(f.agentDir, "extensions/session-ui");
 	const oldConfig = '{"workAnimation":{"enabled":false}}\n';
 	writeFileSync(join(target, "config.json"), oldConfig);
@@ -552,6 +585,7 @@ process.exit(result.status ?? 1);
 	const result = install(f);
 	assert.notEqual(result.status, 0);
 	assert.match(result.stderr, /安装失败/);
+	assert.equal(readFileSync(join(f.agentDir, "models.json"), "utf8"), oldModels);
 	assert.equal(readFileSync(legacyEntry, "utf8"), "old standalone entry\n");
 	assert.equal(existsSync(join(target, "index.ts")), false);
 	assert.equal(readFileSync(join(target, "config.json"), "utf8"), oldConfig);
