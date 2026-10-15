@@ -69,15 +69,25 @@ if (process.env.PI_TEST_REMOVE_NONZERO_AFTER === "1") process.exit(1);
 	};
 }
 
-test("installs the current Antigravity Claude model selection", (t) => {
+test("installs the requested model order while preserving all enabled models", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.deepEqual(
-		settings.enabledModels.filter((model) => model.startsWith("antigravity/claude-")),
-		["antigravity/claude-opus-5-5", "antigravity/claude-sonnet-5-5"],
+		settings.enabledModels,
+		[
+			"claude-bridge/claude-opus-5-5",
+			"openai-codex/gpt-6-astra",
+			"openai-codex/gpt-6.1-sol",
+			"claude-bridge/claude-sonnet-5-5",
+			"claude-bridge/claude-fable-5-1",
+			"xai/grok-4.7",
+			"antigravity/gemini-3.8-flash",
+			"antigravity/claude-opus-5-5",
+			"antigravity/claude-sonnet-5-5",
+		],
 	);
-	assert.ok(settings.enabledModels.includes("antigravity/gemini-3.8-flash"));
+	assert.ok(settings.packages.includes("npm:pi-claude-bridge"));
 });
 
 test("installs only the two requested Codex context overrides", (t) => {

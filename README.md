@@ -81,6 +81,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 | `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
 | `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
+| `pi-claude-bridge` | 通过 Claude Code Agent SDK 接入 Claude 模型 | 配置 Claude Code 登录后，在 `/model` 选择 `claude-bridge` 模型 |
 
 涉及账号、浏览器或系统权限的插件，需自行完成授权和依赖配置。
 
@@ -99,6 +100,8 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 模型覆盖仅将 `openai-codex` 的 `gpt-6-astra` 和 `gpt-6.1-sol` 上下文预算设为 500K tokens，不改其他模型和输出上限。这是 Pi 本地预算，不保证后端支持同等窗口；超出后端限制可能报错。安装器整文件托管 `models.json`，已有自定义模型配置须在确认覆盖前自行整合。
 
 Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravity.refresh` 刷新服务端模型目录，再用 `/model` 选择。
+
+模型轮换顺序为 Claude Bridge Opus 5.5 → GPT-6 Astra → GPT-6.1 Sol → Claude Bridge Sonnet 5.5 → Claude Bridge Fable 5.1 → Grok 4.7 → Antigravity 模型。
 
 模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。
 

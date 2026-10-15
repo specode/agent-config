@@ -1,8 +1,11 @@
 {
 	"theme": "system",
 	"enabledModels": [
+		"claude-bridge/claude-opus-5-5",
 		"openai-codex/gpt-6-astra",
 		"openai-codex/gpt-6.1-sol",
+		"claude-bridge/claude-sonnet-5-5",
+		"claude-bridge/claude-fable-5-1",
 		"xai/grok-4.7",
 		"antigravity/gemini-3.8-flash",
 		"antigravity/claude-opus-5-5",
@@ -28,6 +31,7 @@
 		"npm:@specode/pi-subscription-usage",
 		"npm:@specode/pi-subscription-image",
 		"npm:pi-antigravity",
+		"npm:pi-claude-bridge",
 		"npm:@ff-labs/pi-fff"
 	],
 	"hideThinkingBlock": true,
