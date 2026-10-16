@@ -10,6 +10,11 @@ export interface SessionUiConfig {
 		placement: WidgetPlacement;
 		maxItems: number;
 	};
+	backgroundTasks: {
+		enabled: boolean;
+		placement: WidgetPlacement;
+		maxItems: number;
+	};
 	workAnimation: {
 		enabled: boolean;
 		intervalMs: number;
@@ -55,6 +60,11 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		enabled: true,
 		placement: "aboveEditor",
 		maxItems: 6,
+	},
+	backgroundTasks: {
+		enabled: true,
+		placement: "aboveEditor",
+		maxItems: 3,
 	},
 	workAnimation: {
 		enabled: true,
@@ -179,6 +189,7 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	}
 
 	const toolActivity = objectValue(raw.toolActivity);
+	const backgroundTasks = objectValue(raw.backgroundTasks);
 	const workAnimation = objectValue(raw.workAnimation);
 	const compactPaste = objectValue(raw.compactPaste);
 	const statusline = objectValue(raw.statusline);
@@ -199,6 +210,18 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 			placement = toolActivity.placement;
 		} else {
 			warnings.push("toolActivity.placement must be aboveEditor or belowEditor");
+		}
+	}
+
+	let backgroundPlacement = DEFAULT_SESSION_UI_CONFIG.backgroundTasks.placement;
+	if (backgroundTasks.placement !== undefined) {
+		if (
+			backgroundTasks.placement === "aboveEditor" ||
+			backgroundTasks.placement === "belowEditor"
+		) {
+			backgroundPlacement = backgroundTasks.placement;
+		} else {
+			warnings.push("backgroundTasks.placement must be aboveEditor or belowEditor");
 		}
 	}
 
@@ -251,6 +274,23 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 				toolActivity.maxItems,
 				DEFAULT_SESSION_UI_CONFIG.toolActivity.maxItems,
 				"toolActivity.maxItems",
+				1,
+				20,
+				warnings,
+			),
+		},
+		backgroundTasks: {
+			enabled: booleanValue(
+				backgroundTasks.enabled,
+				DEFAULT_SESSION_UI_CONFIG.backgroundTasks.enabled,
+				"backgroundTasks.enabled",
+				warnings,
+			),
+			placement: backgroundPlacement,
+			maxItems: boundedInteger(
+				backgroundTasks.maxItems,
+				DEFAULT_SESSION_UI_CONFIG.backgroundTasks.maxItems,
+				"backgroundTasks.maxItems",
 				1,
 				20,
 				warnings,

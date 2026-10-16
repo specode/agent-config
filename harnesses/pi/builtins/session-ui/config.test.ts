@@ -27,6 +27,33 @@ test.after(() => {
 	rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 
+test("loads background task defaults and overrides", () => {
+	assert.deepEqual(withConfig({}).config.backgroundTasks, {
+		enabled: true, placement: "aboveEditor", maxItems: 3,
+	});
+	const loaded = withConfig({
+		backgroundTasks: { enabled: false, placement: "belowEditor", maxItems: 5 },
+	});
+	assert.deepEqual(loaded.config.backgroundTasks, {
+		enabled: false, placement: "belowEditor", maxItems: 5,
+	});
+	assert.deepEqual(loaded.warnings, []);
+});
+
+test("warns and falls back for invalid background task fields", () => {
+	const loaded = withConfig({
+		backgroundTasks: { enabled: "yes", placement: "side", maxItems: 0 },
+	});
+	assert.deepEqual(loaded.config.backgroundTasks, {
+		enabled: true, placement: "aboveEditor", maxItems: 3,
+	});
+	assert.deepEqual(loaded.warnings, [
+		"backgroundTasks.placement must be aboveEditor or belowEditor",
+		"backgroundTasks.enabled must be a boolean",
+		"backgroundTasks.maxItems must be an integer between 1 and 20",
+	]);
+});
+
 test("default statusline hides MCP without a public native connection status", () => {
 	const { config } = withConfig({});
 	assert.equal(config.statusline.segments.includes("mcp"), false);

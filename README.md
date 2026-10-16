@@ -76,7 +76,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 
 | 插件 | 用途 | 怎么用 |
 | --- | --- | --- |
-| [session-ui](harnesses/pi/builtins/session-ui/README.md) | 工具活动、图片预览、状态栏与自动标题 | 自动生效；`/effort` 选思考档位，`/statusline` 切换状态栏 |
+| [session-ui](harnesses/pi/builtins/session-ui/README.md) | 工具活动、后台任务、图片预览、状态栏与自动标题 | 自动生效；`/effort` 选思考档位，`/statusline` 切换状态栏 |
 | [Fast](harnesses/pi/builtins/fast/README.md) | OpenAI／Codex 订阅尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
 | `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
