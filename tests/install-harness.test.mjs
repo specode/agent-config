@@ -79,6 +79,7 @@ test("installs the remaining model order without Claude Bridge", (t) => {
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
 			"xai/grok-4.7",
+			"antigravity/gemini-4-argon",
 			"antigravity/gemini-3.8-flash",
 			"antigravity/claude-opus-5-5",
 			"antigravity/claude-sonnet-5-5",
