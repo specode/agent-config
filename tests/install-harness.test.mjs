@@ -69,25 +69,22 @@ if (process.env.PI_TEST_REMOVE_NONZERO_AFTER === "1") process.exit(1);
 	};
 }
 
-test("installs the requested model order while preserving all enabled models", (t) => {
+test("installs the remaining model order without Claude Bridge", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.deepEqual(
 		settings.enabledModels,
 		[
-			"claude-bridge/claude-opus-5-5",
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
-			"claude-bridge/claude-sonnet-5-5",
-			"claude-bridge/claude-fable-5-1",
 			"xai/grok-4.7",
 			"antigravity/gemini-3.8-flash",
 			"antigravity/claude-opus-5-5",
 			"antigravity/claude-sonnet-5-5",
 		],
 	);
-	assert.ok(settings.packages.includes("npm:pi-claude-bridge"));
+	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), false);
 });
 
 test("installs only the two requested Codex context overrides", (t) => {
@@ -285,6 +282,67 @@ test("MCP cleanup refuses linked npm directories outside the target", (t) => {
 	assert.deepEqual(calls(f), []);
 	assert.equal(readFileSync(join(external, "sentinel"), "utf8"), "preserve\n");
 });
+
+test("retires Claude Bridge and its config with backups while preserving unrelated files", (t) => {
+	const f = fixture(t, "pi-claude-bridge");
+	seedOld(f);
+	const config = join(f.agentDir, "claude-bridge.json");
+	const previous = '{"provider":{"plan":"max"}}\n';
+	writeFileSync(config, previous);
+	const preserved = ["auth.json", "sessions/history.jsonl", "extensions/custom.ts"];
+	for (const file of preserved) {
+		mkdirSync(dirname(join(f.agentDir, file)), { recursive: true });
+		writeFileSync(join(f.agentDir, file), "preserve sentinel\n");
+	}
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.ok(existsSync(f.packageDir));
+	assert.equal(readFileSync(config, "utf8"), previous);
+	assert.deepEqual(calls(f), []);
+	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
+	assertSuccess(install(f));
+	assert.equal(existsSync(config), false);
+	assert.equal(existsSync(f.packageDir), false);
+	assert.equal(readFileSync(join(solBackup(f), "claude-bridge.json"), "utf8"), previous);
+	const backup = join(dirname(dirname(dirname(solBackup(f)))), "pi-retired/claude-bridge-package");
+	assert.equal(readFileSync(join(backup, "previous-package/index.ts"), "utf8"), "old plugin fixture\n");
+	assert.ok(JSON.parse(readFileSync(join(backup, "package.json"))).dependencies["pi-claude-bridge"]);
+	assert.ok(existsSync(join(backup, "package-lock.json")));
+	for (const file of preserved) assert.equal(readFileSync(join(f.agentDir, file), "utf8"), "preserve sentinel\n");
+	assertSuccess(install(f));
+	assert.equal(calls(f).length, 1);
+});
+
+test("orphaned Claude Bridge config requires consent and is restored on deployment failure", (t) => {
+	const f = fixture(t, "pi-claude-bridge");
+	assertSuccess(install(f));
+	const config = join(f.agentDir, "claude-bridge.json");
+	writeFileSync(config, "{}\n");
+	assertSuccess(install(f, { input: "n\n" }));
+	assert.equal(readFileSync(config, "utf8"), "{}\n");
+	interceptMove(f, 'args.includes(' + JSON.stringify(config) + ')');
+	assert.notEqual(install(f).status, 0);
+	assert.equal(readFileSync(config, "utf8"), "{}\n");
+	assert.deepEqual(calls(f), []);
+	assertSuccess(install(f));
+	assert.equal(existsSync(config), false);
+});
+
+for (const mode of ["fail", "noop", "failAfter"]) {
+	test(`Claude Bridge cleanup verifies residue and supports retry after ${mode}`, (t) => {
+		const f = fixture(t, "pi-claude-bridge");
+		seedOld(f);
+		const result = install(f, { [mode]: true });
+		if (mode === "failAfter") assertSuccess(result);
+		else {
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /Claude Bridge.*仍有残留/);
+			assert.ok(existsSync(f.packageDir));
+			assert.equal(JSON.parse(readFileSync(join(f.agentDir, "settings.json"))).packages.includes(f.source), false);
+			assertSuccess(install(f));
+		}
+		assert.equal(existsSync(f.packageDir), false);
+	});
+}
 
 const SOL_SOURCE = "git:github.com/NVlabs/SoL-Pi";
 const SOL_PACKAGE = "git/github.com/NVlabs/SoL-Pi";

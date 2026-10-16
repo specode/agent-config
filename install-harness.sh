@@ -304,6 +304,7 @@ pi)
 	managed_entries() {
 		printf '%s\n' \
 			'harnesses/pi/config/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
+			'-|.pi/agent/claude-bridge.json|absent|-|配置|Claude Bridge 旧配置' \
 			'harnesses/pi/config/models.json|.pi/agent/models.json|file|-|配置|模型覆盖' \
 			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
 			'-|.pi/agent/extensions/session-ui.ts|absent|-|插件|session-ui 旧入口' \
@@ -353,6 +354,7 @@ if [ "$HARNESS_ID" = 'pi' ]; then
 	retire_removed_pi_package '@diegopetrucci/pi-openai-fast' 'OpenAI Fast' 'openai-fast-package'
 	retire_removed_pi_package 'pi-mcp-adapter' 'MCP adapter' 'mcp-adapter-package'
 	retire_removed_pi_package 'pi-subagents' 'pi-subagents' 'subagents-package'
+	retire_removed_pi_package 'pi-claude-bridge' 'Claude Bridge' 'claude-bridge-package'
 	retire_legacy_pi_web_search
 fi
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
