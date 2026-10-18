@@ -73,7 +73,7 @@ show_managed_change_summary() {
 
 	printf '%s 检测到变更：\n' "$label"
 	for item_type in '插件' '配置'; do
-		for change_type in '新增' '更新' '移除'; do
+		for change_type in '新增' '更新'; do
 			names="$(LC_ALL=C awk -F '|' -v change_type="$change_type" -v item_type="$item_type" '
 				$1 == change_type && $2 == item_type {
 					if (names != "") names = names "、"
@@ -167,13 +167,6 @@ validate_repository_source() {
 	esac
 }
 
-is_expected_repository_link() {
-	local target="$1"
-	local source="$2"
-
-	[ -L "$target" ] && [ -e "$target" ] && [ "$target" -ef "$source" ]
-}
-
 managed_file_mode_matches() {
 	local target_path="$1"
 	local expected_mode="$2"
@@ -242,7 +235,6 @@ stage_group_paths() {
 
 	mkdir -p "$staging_root" || return 1
 	while IFS='|' read -r repository_path local_path expected_type _expected_mode _item_type _item_name; do
-		[ "$expected_type" != 'absent' ] || continue
 		copy_managed_path \
 			"$(managed_source_path "$repository_path")" \
 			"$staging_root/$local_path" \
@@ -290,8 +282,6 @@ install_staged_paths() {
 	local _repository_path local_path expected_type expected_mode _item_type _item_name
 
 	while IFS='|' read -r _repository_path local_path expected_type expected_mode _item_type _item_name; do
-		# Retired paths were moved to backup with the rest of the transaction.
-		[ "$expected_type" != 'absent' ] || continue
 		copy_managed_path \
 			"$staging_root/$local_path" \
 			"$AGENT_CONFIG_INSTALL_HOME/$local_path" \
@@ -391,11 +381,7 @@ deploy_group_transaction() {
 
 	if ! installer_uses_summary_output; then
 		while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
-			if [ "$_expected_type" = 'absent' ]; then
-				success "已确保移除 $AGENT_CONFIG_INSTALL_HOME/$local_path"
-			else
-				success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
-			fi
+			success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
 		done <"$manifest"
 	fi
 }
@@ -408,13 +394,10 @@ install_managed_group() {
 	local repository_path local_path expected_type expected_mode item_type item_name
 	local source_path target_path actual_mode answer
 	local group_missing=0
-	local group_legacy_links=0
 	local group_conflict=0
 
 	# shellcheck disable=SC2034 # Read by summary-mode callers after this function returns.
 	INSTALL_MANAGED_CHANGED=0
-	# shellcheck disable=SC2034 # Allows callers to skip post-install migrations after a declined replacement.
-	INSTALL_MANAGED_DECLINED=0
 	: >"$changes_log"
 	managed_entries >"$manifest"
 	if [ ! -s "$manifest" ]; then
@@ -436,17 +419,6 @@ install_managed_group() {
 	while IFS='|' read -r repository_path local_path expected_type expected_mode item_type item_name; do
 		source_path="$(managed_source_path "$repository_path")"
 		target_path="$AGENT_CONFIG_INSTALL_HOME/$local_path"
-		if [ "$expected_type" = 'absent' ]; then
-			if [ -e "$target_path" ] || [ -L "$target_path" ]; then
-				if installer_uses_summary_output; then
-					record_managed_change "$changes_log" '移除' "$item_type" "$item_name" "$local_path"
-				else
-					printf '  [待移除] %s\n' "$target_path"
-				fi
-				group_conflict=1
-			fi
-			continue
-		fi
 		validate_repository_source "$source_path" "$expected_type"
 
 		if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
@@ -463,17 +435,10 @@ install_managed_group() {
 			if installer_uses_summary_output; then
 				record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
 			fi
-			if is_expected_repository_link "$target_path" "$source_path"; then
-				if ! installer_uses_summary_output; then
-					printf '  [旧版仓库软链接] %s\n' "$target_path"
-				fi
-				group_legacy_links=1
-			else
-				if ! installer_uses_summary_output; then
-					printf '  [软链接冲突] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
-				fi
-				group_conflict=1
+			if ! installer_uses_summary_output; then
+				printf '  [软链接冲突] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
 			fi
+			group_conflict=1
 			continue
 		fi
 
@@ -559,13 +524,11 @@ install_managed_group() {
 		case "$answer" in
 		y | Y | yes | YES | Yes) ;;
 		*)
-			# shellcheck disable=SC2034 # Read by harness-specific post-install migrations.
-			INSTALL_MANAGED_DECLINED=1
 			info "$label 已整组保持不变"
 			return 0
 			;;
 		esac
-	elif [ "$group_missing" -eq 0 ] && [ "$group_legacy_links" -eq 0 ]; then
+	elif [ "$group_missing" -eq 0 ]; then
 		success "$label 已与仓库一致"
 		return 0
 	elif ! installer_uses_summary_output; then

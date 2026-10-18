@@ -253,7 +253,7 @@ function isGrokFastModel(model: ModelLike | undefined): boolean {
 	return (
 		model?.provider === GROK_PROVIDER &&
 		model.api === GROK_API &&
-		(model.id === GROK_BASE_ID || model.id === GROK_FAST_ID)
+		model.id === GROK_BASE_ID
 	);
 }
 
@@ -427,8 +427,8 @@ async function reconcile(
 	if (model?.provider !== GROK_PROVIDER || !isGrokFastModel(model)) return;
 	const version = state.config.grokClientVersion;
 	const shouldUseFast = switchOn(ctx, state) && !inactiveReason(ctx, state);
-	const applied = transportActive(model, version) && model.id === GROK_BASE_ID;
-	const clean = !transportActive(model, version) && model.id === GROK_BASE_ID;
+	const applied = transportActive(model, version);
+	const clean = !applied;
 
 	if (shouldUseFast) {
 		if (applied) return;

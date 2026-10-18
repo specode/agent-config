@@ -90,7 +90,7 @@ API-key 认证、`openai-completions` 和其他兼容 provider 不适用。OpenA
 
 开关开启且当前模型是 `xai/grok-4.7` 时，扩展**保持模型身份不变**，只把这一个会话的传输换成代理：`baseUrl` 指向 `https://cli-chat-proxy.grok.com/v1`，带上代理所需的 `X-XAI-Token-Auth`、`x-grok-model-override`、`x-authenticateresponse`、`x-grok-client-identifier` 和 `x-grok-client-version`，并在 payload 里把模型名改成 `grok-4.7-build-fast`。关闭、离开该模型或重启后恢复公开 API 的传输。
 
-会话记录、模型范围（`enabledModels`）和"上次使用的模型"始终看到目录里真实存在的 `xai/grok-4.7`，所以恢复会话和 Ctrl+P 循环不会出问题。旧会话里残留的 `grok-4.7-build-fast` 选择会在下一次处理时被换回 `xai/grok-4.7`。
+会话记录、模型范围（`enabledModels`）和"上次使用的模型"始终看到目录里真实存在的 `xai/grok-4.7`，所以恢复会话和 Ctrl+P 循环不会出问题。不自动迁移旧会话中的模型选择；如选择了目录外模型，请手动切换为 `xai/grok-4.7`。
 
 代理按 Grok CLI 的客户端标识和版本放行，**扩展因此会声明自己是该版本的 Grok CLI**。版本下限提高时代理会返回 426，此时更新 `grokClientVersion`。它复用 Pi 已有的 xAI OAuth，不读取凭据文件，API key 不会被送到代理。
 

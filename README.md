@@ -18,9 +18,9 @@
 ./install-harness.sh claude-code   # 按需安装
 ```
 
-依赖：Pi 配置安装需要 `rsync`、Node 和 `pi` 命令；Claude Code 状态栏需要 `jq`。
+依赖：Pi 配置安装需要 `rsync`；Claude Code 状态栏需要 `jq`。
 
-有冲突时，安装器会询问是否备份并覆盖，已退役插件的托管文件也会一起清理并备份。更新 Pi 配置前请先退出正在运行的 Pi，避免旧插件继续写入缓存；安装后重新启动。
+有冲突时，安装器会询问是否备份并覆盖。安装器只部署当前托管配置，不清理旧插件、卸载外部包或迁移历史配置；旧入口可能仍被工具加载，请按需手动处理。安装后重新启动工具。
 
 **安装前注意：**
 
@@ -118,7 +118,6 @@ Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravi
 - `pi mcp list`：从终端检查连接；`pi mcp login <server>`：完成 OAuth 授权。
 - 修改配置后执行 `/reload` 或重新启动 Pi。
 - 内置 MCP 暂无公开连接状态接口，session-ui 暂不显示 MCP 区块；连接状态请查看 `/mcp`。
-- 安装器会备份并卸载旧 `pi-mcp-adapter` 包，保留个人 MCP 配置及凭据；旧 `mcp-adapter.json` 不会自动转为原生配置，升级前须将服务器迁入 `mcp.json`。
 
 **界面与 Fast**
 

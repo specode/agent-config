@@ -730,7 +730,7 @@ test("refuses to send the fast model id to the public xAI API", async (t) => {
 	assert.equal("x-grok-model-override" in headers, false);
 });
 
-test("a legacy fast-id session is healed back to the catalog id", async (t) => {
+test("a non-catalog fast-id session is not migrated", async (t) => {
 	const h = await harness(t);
 	h.ctx.modelRegistry.find = () => grokBase();
 	h.ctx.model = {
@@ -743,13 +743,12 @@ test("a legacy fast-id session is healed back to the catalog id", async (t) => {
 			"x-grok-model-override": "grok-4.7-build-fast",
 		},
 	} as Model;
+	const original = h.ctx.model;
 	await h.emit("model_select");
-	assert.equal(h.ctx.model?.id, "grok-4.7");
-	assert.equal(h.ctx.model?.baseUrl, PROXY_URL);
-	assert.equal(h.footer(), "fast");
+	assert.equal(h.ctx.model, original);
+	assert.notEqual(h.footer(), "fast");
 	await h.command("off");
-	assert.equal(h.ctx.model?.id, "grok-4.7");
-	assert.equal(h.ctx.model?.baseUrl, "https://api.x.ai/v1");
+	assert.equal(h.ctx.model, original);
 });
 
 test("an already proxied model without the client version is corrected", async (t) => {
