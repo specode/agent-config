@@ -1,6 +1,6 @@
 # Pi session-ui
 
-`session-ui` 为个人 Pi 工作流提供工具活动、后台任务、工作动画、图片预览、自定义状态栏、思考档位切换，以及自动任务标题和任务状态摘要。主要用于交互式终端界面（TUI）。
+`session-ui` 为个人 Pi 工作流提供工具活动、工作动画、图片预览、自定义状态栏、思考档位切换，以及自动任务标题和任务状态摘要。主要用于交互式终端界面（TUI）。
 
 ## 快速开始
 
@@ -27,7 +27,6 @@
 | 功能 | 使用方式 |
 | --- | --- |
 | 工具活动 | 在编辑器附近显示本轮最近的工具执行状态，本轮结束后清空；正式结果仍在对话记录中。Codemode 脚本发起的调用缩进显示在该 Codemode 下，Codemode 行显示调用数与失败数 |
-| 后台任务 | 编辑器上方自动显示 bash 命令返回后仍在运行的进程、PID 与运行时长，每秒采样；退出即移除，无任务时隐藏，不保存历史 |
 | 工作动画 | 工作时显示动画并更新终端标题；`/work-animation on` 或 `off` 开关，`status` 查询 |
 | 图片预览 | 粘贴图片后，将光标移入图片标签即可预览 |
 | 状态栏 | 显示模型、思考档位、目录、分支、用量等；`/statusline` 临时切换 |
@@ -63,14 +62,12 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 
 ### 功能开关与位置
 
-以下功能均可通过对应的 `enabled` 字段关闭，默认均为 `true`：`toolActivity`、`backgroundTasks`、`workAnimation`、`compactPaste`、`statusline`、`effort`、`turnDuration`、`uiMeta`。
+以下功能均可通过对应的 `enabled` 字段关闭，默认均为 `true`：`toolActivity`、`workAnimation`、`compactPaste`、`statusline`、`effort`、`turnDuration`、`uiMeta`。
 
 | 配置路径 | 可选值／默认值 | 说明 |
 | --- | --- | --- |
 | `toolActivity.placement` | `aboveEditor`（默认）／`belowEditor` | 工具活动位置 |
 | `toolActivity.maxItems` | 1–20；默认 6 | 最多展示行数：先展示最近的顶层调用，剩余行数给嵌套调用，较早的嵌套调用折叠为一行 |
-| `backgroundTasks.placement` | `aboveEditor`（默认）／`belowEditor` | 后台任务位置 |
-| `backgroundTasks.maxItems` | 1–20；默认 3 | 最多展示的任务行数，超出在标题显示 hidden 数量 |
 | `workAnimation.placement` | `aboveEditor`（默认）／`belowEditor` | 工作动画位置 |
 | `workAnimation.intervalMs` | 100–500；默认 180 | 动画刷新间隔，单位毫秒 |
 | `statusline.overflow` | `drop-right`（默认）／`priority` | 空间不足时从右侧隐藏，或先压缩再按优先级隐藏 |
@@ -89,23 +86,9 @@ PI_SESSION_UI_CONFIG=/absolute/path/to/session-ui.json pi
 | `uiMeta.sessionName.maxLength` | 8–100；默认 48 | 会话名称最大可见字符数 |
 | `uiMeta.sessionName.manualNameLocks` | boolean；默认 `true` | 手工命名后阻止自动覆盖 |
 
-## 工具活动与后台任务
+## 工具活动
 
-两者分工明确，同一个命令只出现在一处：
-
-- **Activity（前台工具）** 跟踪工具调用：`Inspect`（read/ls）、`Search`（grep/find）、`Run`（bash）、`Change`（edit/write）、`Codemode`，其余工具显示格式化的工具名称。标记 `◆`／`◇`／`✗` 分别表示运行中、完成、失败；本轮结束后清空。bash 命令运行期间，它启动的进程都属于前台，只在这里显示。
-- **Background（后台任务）** 显示 bash 命令返回后仍在运行的进程，例如以 `&`、`nohup` 启动的服务。每个任务一行：`◆ 命令 · pid PID · N procs · 时长`，`N procs` 为任务连同其子进程的数量（只有一个进程时省略）；较新的任务在前。任务退出即移除，跨轮次和会话切换保留，无任务时隐藏；不占用输入焦点，不写入对话或模型上下文。
-
-Pi 以独立进程组运行每条 shell 命令，并只等待 shell 退出。只有确认组长是 Pi 的直接子进程、组长已退出而组内仍有进程存活时，才显示为后台任务，不按命令文本或时间推测归属。因此：
-
-- 模型服务、语言服务、MCP 等常驻子进程，以及其他来源的进程不显示。
-- 命令只启动后台进程就立即返回（如 `npm run dev > log 2>&1 &`）时，shell 通常在首次采样前已退出，没有可确认的证据，**通常不会显示**；shell 存活超过约 1 秒（如 `cmd & sleep 2`）时才能确认。
-- 通过 `setsid` 或守护化（如 `docker run -d`、`--daemonize`）脱离进程组的程序不显示。
-- `/reload` 或重启 Pi 前启动的任务不再显示。
-
-后台任务仅在 macOS/Linux 的交互式 TUI 中启用，约每秒通过系统 `ps` 只读采样一次（Linux 另读任务的 `/proc/<pid>/cmdline` 取得原始参数），不拦截、替换或终止命令；时长为进程启动至今的时间，不是 CPU 时间。采样失败时清空过期行并提示一次，随后自动重试；切换会话、重载或退出时停止旧采样。
-
-命令行按原样单行显示，**不做脱敏**：参数中的 token、密码等会直接出现在界面上，截图或共享屏幕前请留意。仅移除终端控制字符，多行参数中的换行、制表符显示为空格（macOS `ps` 输出的 `\012` 等转义同样处理）。可用 `backgroundTasks.enabled: false` 关闭。
+Activity 跟踪本轮工具调用：`Inspect`（read/ls）、`Search`（grep/find）、`Run`（bash）、`Change`（edit/write）、`Codemode`，其余工具显示格式化的工具名称。标记 `◆`／`◇`／`✗` 分别表示运行中、完成、失败；本轮结束后清空。正式结果仍保留在对话记录中。
 
 ## 图片粘贴与预览
 

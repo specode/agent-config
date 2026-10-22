@@ -27,30 +27,30 @@ test.after(() => {
 	rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 
-test("loads background task defaults and overrides", () => {
-	assert.deepEqual(withConfig({}).config.backgroundTasks, {
-		enabled: true, placement: "aboveEditor", maxItems: 3,
+test("loads tool activity defaults and overrides", () => {
+	assert.deepEqual(withConfig({}).config.toolActivity, {
+		enabled: true, placement: "aboveEditor", maxItems: 6,
 	});
 	const loaded = withConfig({
-		backgroundTasks: { enabled: false, placement: "belowEditor", maxItems: 5 },
+		toolActivity: { enabled: false, placement: "belowEditor", maxItems: 5 },
 	});
-	assert.deepEqual(loaded.config.backgroundTasks, {
+	assert.deepEqual(loaded.config.toolActivity, {
 		enabled: false, placement: "belowEditor", maxItems: 5,
 	});
 	assert.deepEqual(loaded.warnings, []);
 });
 
-test("warns and falls back for invalid background task fields", () => {
+test("warns and falls back for invalid tool activity fields", () => {
 	const loaded = withConfig({
-		backgroundTasks: { enabled: "yes", placement: "side", maxItems: 0 },
+		toolActivity: { enabled: "yes", placement: "side", maxItems: 0 },
 	});
-	assert.deepEqual(loaded.config.backgroundTasks, {
-		enabled: true, placement: "aboveEditor", maxItems: 3,
+	assert.deepEqual(loaded.config.toolActivity, {
+		enabled: true, placement: "aboveEditor", maxItems: 6,
 	});
 	assert.deepEqual(loaded.warnings, [
-		"backgroundTasks.placement must be aboveEditor or belowEditor",
-		"backgroundTasks.enabled must be a boolean",
-		"backgroundTasks.maxItems must be an integer between 1 and 20",
+		"toolActivity.placement must be aboveEditor or belowEditor",
+		"toolActivity.enabled must be a boolean",
+		"toolActivity.maxItems must be an integer between 1 and 20",
 	]);
 });
 

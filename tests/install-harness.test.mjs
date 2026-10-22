@@ -113,8 +113,6 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"config/keybindings.json": ".pi/agent/keybindings.json",
 		"builtins/session-ui/index.ts": ".pi/agent/extensions/session-ui/index.ts",
 		"builtins/session-ui/config.ts": ".pi/agent/extensions/session-ui/config.ts",
-		"builtins/session-ui/background-tasks.ts": ".pi/agent/extensions/session-ui/background-tasks.ts",
-		"builtins/session-ui/background-tasks-core.ts": ".pi/agent/extensions/session-ui/background-tasks-core.ts",
 		"builtins/fast/index.ts": ".pi/agent/extensions/fast/index.ts",
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
@@ -132,6 +130,10 @@ test("maps the three source categories to Pi runtime paths without installing in
 	for (const path of ["builtins", "plugin-configs", "config", "automode.json", "extensions/session-ui.ts", "extensions/pi-auto-review", "extensions/pi-permission-system"]) {
 		assert.equal(existsSync(join(f.agentDir, path)), false, path);
 	}
+	assert.deepEqual(
+		readdirSync(join(f.agentDir, "extensions/session-ui")).sort(),
+		[...readdirSync(join(ROOT, "harnesses/pi/builtins/session-ui")), "config.json"].sort(),
+	);
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.equal(settings.theme, "system");
 	assert.deepEqual(settings.defaultTools, ["+codemode"]);

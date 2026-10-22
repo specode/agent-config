@@ -18,7 +18,6 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCompactPasteEditor } from "./compact-paste.ts";
-import { registerBackgroundTasks } from "./background-tasks.ts";
 import { loadSessionUiConfig } from "./config.ts";
 import { registerEffort } from "./effort.ts";
 import { registerStatusline } from "./statusline.ts";
@@ -46,9 +45,6 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	if (config.compactPaste.enabled) registerCompactPasteEditor(pi);
 	if (config.toolActivity.enabled) {
 		registerToolActivity(pi, config.toolActivity);
-	}
-	if (config.backgroundTasks.enabled) {
-		registerBackgroundTasks(pi, config.backgroundTasks);
 	}
 	if (config.statusline.enabled) registerStatusline(pi, config.statusline);
 	if (config.effort.enabled) registerEffort(pi);
