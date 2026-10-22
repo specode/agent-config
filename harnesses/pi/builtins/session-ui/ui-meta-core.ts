@@ -18,7 +18,6 @@ export interface UiMetaTurnStart {
 	kind: "turn_start";
 	title?: string;
 	session?: UiMetaSessionDirective;
-	task?: UiMetaSessionDirective;
 }
 
 export interface UiMetaTurnEnd {
@@ -28,22 +27,6 @@ export interface UiMetaTurnEnd {
 }
 
 export type UiMetaRecord = UiMetaTurnStart | UiMetaTurnEnd;
-
-export interface UiMetaRunProgress {
-	startReceived: boolean;
-	recapReceived: boolean;
-}
-
-export function beginUiMetaRun(
-	startEnabled: boolean,
-	recapEnabled: boolean,
-	previous: UiMetaRunProgress,
-	isCompactionContinuation: boolean,
-): UiMetaRunProgress {
-	return isCompactionContinuation
-		? previous
-		: { startReceived: !startEnabled, recapReceived: !recapEnabled };
-}
 
 export function canCommitUiMetaRecap(
 	stopReason: string,
@@ -103,14 +86,12 @@ function parseRecord(
 				? sanitizeUiMetaText(value.title, limits.title)
 				: undefined;
 		const session = parseSessionDirective(value.session, limits);
-		const task = parseSessionDirective(value.task, limits);
-		if (!title && !session && !task) return undefined;
+		if (!title && !session) return undefined;
 		return {
 			v: 1,
 			kind: "turn_start",
 			...(title ? { title } : {}),
 			...(session ? { session } : {}),
-			...(task ? { task } : {}),
 		};
 	}
 
@@ -215,9 +196,7 @@ export function extractUiMetaRecords(
 	return records;
 }
 
-export type UiMetaRecapMiss =
-	| { reason: "missing" }
-	| { reason: "invalid" | "misplaced"; snippet: string };
+export type UiMetaRecapIssue = { reason: "invalid" | "misplaced"; snippet: string };
 
 const RECAP_MISS_SNIPPET_LENGTH = 160;
 
@@ -233,13 +212,14 @@ function protocolSnippet(line: string, markerIndex: number): string {
 }
 
 /**
- * Explain why a final response produced no turn_end record, using the raw text
- * before metadata stripping. The result is diagnostic only and never displayed.
+ * Diagnose attempted but malformed recaps before stripping. Omission is normal;
+ * diagnostics are never displayed or sent back to the model.
  */
-export function diagnoseUiMetaRecapMiss(
+export function diagnoseUiMetaRecapIssue(
 	text: string,
 	limits: UiMetaLimits,
-): UiMetaRecapMiss {
+): UiMetaRecapIssue | undefined {
+	if (extractUiMetaRecords(text, limits).some((record) => record.kind === "turn_end")) return undefined;
 	const lines = text.split(/\r?\n/);
 	const lastIndex = boundaryLineIndexes(lines).at(-1);
 	const last = lastIndex === undefined ? undefined : lines[lastIndex];
@@ -262,7 +242,7 @@ export function diagnoseUiMetaRecapMiss(
 			};
 		}
 	}
-	return { reason: "missing" };
+	return undefined;
 }
 
 function stripCompleteLegacyBoundaryBlocks(text: string): string {

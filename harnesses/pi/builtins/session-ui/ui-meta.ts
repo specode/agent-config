@@ -3,19 +3,18 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import {
-	beginUiMetaRun,
 	canCommitUiMetaRecap,
-	diagnoseUiMetaRecapMiss,
+	diagnoseUiMetaRecapIssue,
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
 	UI_META_SENTINEL,
 	type UiMetaLimits,
-	type UiMetaRecapMiss,
+	type UiMetaRecapIssue,
 	type UiMetaRecord,
 } from "./ui-meta-core.ts";
 import type { SessionTitleController } from "./title-controller.ts";
@@ -30,8 +29,6 @@ type UiMetaConfig = SessionUiConfig["uiMeta"];
 interface UiMetaStateData {
 	v: 1;
 	title?: string;
-	autoSessionName?: string;
-	task?: { name: string };
 }
 
 interface TurnRecapData {
@@ -40,10 +37,10 @@ interface TurnRecapData {
 	timestamp: number;
 }
 
-/** Hidden diagnostic: why a final response in this run produced no recap. */
-type RecapMissData = {
+/** Only attempted but invalid or premature recaps need diagnostics. */
+type RecapIssueData = {
 	v: 1;
-	reason: UiMetaRecapMiss["reason"] | "early";
+	reason: UiMetaRecapIssue["reason"] | "early";
 	snippet?: string;
 	timestamp: number;
 };
@@ -52,10 +49,6 @@ function isAssistantMessage(
 	message: AgentMessage,
 ): message is AssistantMessage {
 	return "role" in message && message.role === "assistant";
-}
-
-function isUserMessage(message: AgentMessage): message is UserMessage {
-	return "role" in message && message.role === "user";
 }
 
 function assistantText(message: AssistantMessage): string {
@@ -87,98 +80,36 @@ function stripMessageMetadata(
 	return changed ? { ...message, content } : undefined;
 }
 
-function appendRequestToLatestUserMessage(
-	messages: AgentMessage[],
-	request: string,
-): AgentMessage[] | undefined {
-	let index = -1;
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const message = messages[i];
-		if (message && isUserMessage(message)) {
-			index = i;
-			break;
-		}
-	}
-	if (index < 0) return undefined;
-
-	const current = messages[index];
-	if (!current || !isUserMessage(current)) return undefined;
-	const marker = { type: "text" as const, text: `\n\n${request}` };
-	const content =
-		typeof current.content === "string"
-			? [{ type: "text" as const, text: current.content }, marker]
-			: [...current.content, marker];
-	const next = [...messages];
-	next[index] = { ...current, content };
-	return next;
-}
-
-function latestStoredState(
-	ctx: ExtensionContext,
-	limits: UiMetaLimits,
-): UiMetaStateData | undefined {
-	const branch = ctx.sessionManager.getBranch();
-	for (let i = branch.length - 1; i >= 0; i--) {
-		const entry = branch[i];
-		if (
-			entry?.type !== "custom" ||
-			entry.customType !== UI_META_STATE_TYPE ||
-			!entry.data ||
-			typeof entry.data !== "object"
-		) {
-			continue;
-		}
-		const data = entry.data as Partial<UiMetaStateData>;
-		if (data.v !== 1) continue;
-		const name =
-			typeof data.task?.name === "string"
-				? sanitizeUiMetaText(data.task.name, limits.sessionName)
-				: "";
-		return {
-			...(name ? { task: { name } } : {}),
-			v: 1,
-			...(typeof data.title === "string" && data.title
-				? { title: data.title }
-				: {}),
-			...(typeof data.autoSessionName === "string" && data.autoSessionName
-				? { autoSessionName: data.autoSessionName }
-				: {}),
-		};
-	}
-	return undefined;
-}
-
 function buildProtocolPrompt(config: UiMetaConfig): string {
 	const startEnabled = config.title.enabled || config.sessionName.enabled;
+	const startExample = JSON.stringify({
+		v: 1,
+		kind: "turn_start",
+		...(config.title.enabled ? { title: "..." } : {}),
+		...(config.sessionName.enabled ? { session: { action: "set", name: "..." } } : {}),
+	});
 	return `# Session UI metadata protocol
-The application may append a <ui_meta_request> JSON marker to the latest user message. Treat it as private application metadata, not as user-authored content.
+Metadata is optional display-only output alongside your normal answer. Most confirmations, follow-up questions and routine progress need no metadata. Omission means keep the existing UI; never add a record just to satisfy a cadence. Do not output task identifiers or keep/skip records.
 
-When the marker is present:
-${
-	startEnabled
-		? `- If needStart is true, begin the first assistant message with exactly one raw single-line ${UI_META_SENTINEL}{JSON} record before prose or tool calls.
-- The start JSON schema is {"v":1,"kind":"turn_start","title":"...","session":{"action":"keep"}}. The session directive may instead be {"action":"set","name":"..."}. Task directives, when requested below, are an additional field with their own set/keep rules.
-- title describes the immediate action for the latest user turn (what is being done now), not the whole conversation. Maximum ${config.title.maxLength} visible characters.${config.title.enabled ? "" : " Omit title because title metadata is disabled."}
-- session.name describes the current high-level goal of the whole session. Use session.action=set only for the first clear goal or when the user replaces it with a different high-level goal. Use keep for continuations, refinements, tests, reviews, or subtasks.${config.sessionName.enabled ? ` Maximum ${config.sessionName.maxLength} visible characters.` : " Omit session because session-name metadata is disabled."}`
-		: "- Do not emit turn_start metadata because start metadata is disabled."
-}
-${
-	config.recap.enabled
-		? `- In the final assistant message that completes the request and contains no tool calls, end with exactly one raw single-line ${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"..."} record.
-- When needStart is true, include task in turn_start: {"action":"set","name":"..."} when currentTaskName is null or the user starts a genuinely different goal; use {"action":"keep"} only when continuing an existing currentTaskName. If needStart is false, infer the current task from the conversation without emitting turn_start. Task metadata is a best-effort hint; missing task metadata must not prevent emitting recap. Task names are limited to ${config.sessionName.maxLength} visible characters. Follow-ups, corrections, tests and explanations of the same goal keep the task. Task identity is independent of session naming and its manual lock.
-- A task is bounded by the outcome the user wants to achieve, not by an individual message, tool call, action, or workflow phase. Clarifying requirements, discussing a solution, implementing it, testing it, and correcting it remain one task when they serve that same outcome. Set a new task only when the user starts or replaces that outcome with a different goal; do not merge unrelated goals merely because they share a topic.
-- recap is the latest overall status of the current task across all relevant conversation turns, NOT a report of only this agent run. Select the most important still-valid accomplishments, unresolved blockers and verification gaps; replace superseded claims with the latest evidence. Never carry results from a different task or invent facts missing from available context. Maximum ${config.recap.maxLength} visible characters.
-- Describe the stage actually reached. Confirmed requirements, proposed or agreed solutions, implemented changes, and verified results are distinct states. Discussion, agreement, or a plan is not implementation; implementation is not verification. For discussion-only tasks, summarize what was clarified or decided and what remains unresolved, without implying that code was changed or tests ran. If implementation is part of the goal but has not begun, say so when relevant. Treat suggestions as proposals unless the user accepted them.
-- Provide a concise, standalone current status of the ongoing task within the character limit, not a delta or a summary limited to the latest response. Prioritize the latest overall state, open blockers and verification gaps; omit lower-priority historical detail rather than attempting an exhaustive history. Recap is display-only and is not fed back as evidence.`
-		: "- Do not emit turn_end metadata because recap metadata is disabled."
-}
-- Put each metadata record on its own physical line. The sentinel is the complete envelope; do not add XML tags, a closing marker, Markdown fences, quotes around the record, or an explanation.
-- Use the same language as the latest real user request and omit trailing punctuation.
-- Do not copy secrets, credentials, full paths, terminal control sequences, or raw user text into metadata.
-- If sessionNameLocked is true, session.action must be keep.
-- needStart and needRecap are fixed for the whole agent run. Emit turn_start only in the first assistant message after the latest real user request; do not repeat it after tool results. Emit turn_end only in the final tool-free response.
-- If needStart is false, do not emit turn_start. If needRecap is false, do not emit turn_end.
-- Metadata must not change the substance, ordering, or completeness of the normal response.`;
+${startEnabled
+		? `Only in the first assistant message responding to a real user request, you may prepend one single-line ${UI_META_SENTINEL}${startExample} record before prose or tool calls. Omit unchanged or irrelevant fields:
+${config.title.enabled
+			? `- "title": a concise current activity, at most ${config.title.maxLength} visible characters. Propose it when a clear activity first emerges (discussion counts), or substantive work begins or changes. Do not retitle routine confirmations, refinements, tool continuations or background notifications.`
+			: "- Do not include title; title metadata is disabled."}
+${config.sessionName.enabled
+			? `- "session":{"action":"set","name":"..."}: a stable high-level session goal, at most ${config.sessionName.maxLength} visible characters. Propose a name when the first clear goal emerges, not every turn. The application only names unnamed sessions and preserves every existing name, including manual names.`
+			: "- Do not include session; automatic naming is disabled."}`
+		: "Do not emit turn_start metadata; title and automatic naming are disabled."}
+
+${config.recap.enabled
+		? `Only when the final tool-free answer establishes a significant conclusion, completed result, blocker, failure or important correction, you may append one single-line ${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"..."} record. Omit it for acknowledgements, routine progress, questions without a new conclusion, and restatements. Important background results may warrant a recap, but not a new title or session name.
+- Recap is a standalone overall status of the current user goal across relevant turns, at most ${config.recap.maxLength} visible characters; not merely the latest reply or an incremental update. Include the most important still-valid result and unresolved blocker or verification gap.
+- Clarification, planning, implementation, tests and corrections can serve the same goal. When the goal changes, do not carry over unrelated accomplishments. No separate task record is needed.
+- Distinguish proposed, agreed, implemented and verified work. Discussion or agreement is not implementation; implementation is not verification. Do not claim tests ran or succeeded without evidence. Correct superseded conclusions.
+- Recaps are not fed back to the model as evidence. Never assume an earlier recap proves a result.`
+		: "Do not emit turn_end metadata; recap is disabled."}
+
+Put records on their own physical lines, with no XML tags, closing marker, code fences or explanation. Use the latest real user's language and no trailing punctuation. Exclude secrets, credentials, full paths and terminal control characters. Do not repeat start metadata after tool results. Metadata must not alter, delay or replace the normal answer.`;
 }
 
 export function registerUiMeta(
@@ -192,155 +123,91 @@ export function registerUiMeta(
 		sessionName: config.sessionName.maxLength,
 	};
 	const protocolPrompt = buildProtocolPrompt(config);
-	const startMetadataEnabled =
-		config.title.enabled || config.sessionName.enabled;
+	const startMetadataEnabled = config.title.enabled || config.sessionName.enabled;
 
 	let enabledForSession = false;
 	let requestActive = false;
-	let requestMarker = "";
+	let startOpen = false;
 	let continueAfterCompaction = false;
-	let startReceived = !startMetadataEnabled;
-	let recapReceived = !config.recap.enabled;
+	let recapReceived = false;
 	let currentTitle = "";
-	let autoSessionName: string | undefined;
-	let pendingAutoSessionName: string | undefined;
-	let manualSessionNameLocked = false;
-	let currentTask: UiMetaStateData["task"];
-	let taskReceived = !config.recap.enabled;
+	let lastRecap: string | undefined;
 	let stateDirty = false;
-	let pendingRecaps: TurnRecapData[] = [];
-	let pendingRecapMisses: RecapMissData[] = [];
-	let recapMiss: RecapMissData | undefined;
+	let pendingRecap: TurnRecapData | undefined;
+	let recapIssue: RecapIssueData | undefined;
 	let earlyRecapSeen = false;
 
-	const buildRequestMarker = (needStart: boolean, needRecap: boolean) =>
-		`<ui_meta_request>${JSON.stringify({
-			v: 1,
-			needStart,
-			needRecap,
-			currentTitle: currentTitle || null,
-			currentTaskName: currentTask?.name ?? null,
-			currentSessionName: pi.getSessionName()?.trim() || null,
-			sessionNameLocked: manualSessionNameLocked,
-		})}</ui_meta_request>`;
+	const resetRun = () => {
+		requestActive = false;
+		startOpen = false;
+		continueAfterCompaction = false;
+		recapReceived = false;
+		pendingRecap = undefined;
+		recapIssue = undefined;
+		earlyRecapSeen = false;
+	};
 
 	const restoreState = (ctx: ExtensionContext) => {
-		const stored = latestStoredState(ctx, limits);
-		currentTask = stored?.task;
-		currentTitle = stored?.title ?? "";
-		pendingAutoSessionName = undefined;
-		const currentName = pi.getSessionName()?.trim();
-		const storedAutoName = stored?.autoSessionName?.trim();
-		if (currentName && storedAutoName === currentName) {
-			autoSessionName = currentName;
-			manualSessionNameLocked = false;
-		} else {
-			autoSessionName = undefined;
-			manualSessionNameLocked = Boolean(
-				config.sessionName.manualNameLocks && currentName,
-			);
+		currentTitle = "";
+		lastRecap = undefined;
+		let foundTitle = false;
+		const branch = ctx.sessionManager.getBranch();
+		for (let i = branch.length - 1; i >= 0; i--) {
+			const entry = branch[i];
+			if (entry?.type !== "custom" || !entry.data || typeof entry.data !== "object") continue;
+			if (entry.customType === UI_META_STATE_TYPE && !foundTitle) {
+				const data = entry.data as Partial<UiMetaStateData>;
+				if (data.v !== 1) continue;
+				currentTitle = typeof data.title === "string"
+					? sanitizeUiMetaText(data.title, limits.title) : "";
+				foundTitle = true;
+			}
+			if (entry.customType === TURN_RECAP_TYPE && lastRecap === undefined) {
+				const data = entry.data as Partial<TurnRecapData>;
+				if (data.v === 1 && typeof data.text === "string") {
+					lastRecap = sanitizeUiMetaText(data.text, limits.recap) || undefined;
+				}
+			}
+			if (foundTitle && lastRecap !== undefined) break;
 		}
 		stateDirty = false;
 		titleController.setTaskTitle(config.title.enabled ? currentTitle : "");
 	};
 
 	const flushPendingEntries = () => {
-		for (const recap of pendingRecaps) {
-			pi.appendEntry<TurnRecapData>(TURN_RECAP_TYPE, recap);
-		}
-		pendingRecaps = [];
-		for (const miss of pendingRecapMisses) {
-			pi.appendEntry<RecapMissData>(RECAP_MISS_TYPE, miss);
-		}
-		pendingRecapMisses = [];
+		if (pendingRecap) pi.appendEntry<TurnRecapData>(TURN_RECAP_TYPE, pendingRecap);
+		pendingRecap = undefined;
+		if (recapIssue && !recapReceived) pi.appendEntry<RecapIssueData>(RECAP_MISS_TYPE, recapIssue);
+		recapIssue = undefined;
 		if (!stateDirty) return;
 		pi.appendEntry<UiMetaStateData>(UI_META_STATE_TYPE, {
 			v: 1,
 			...(currentTitle ? { title: currentTitle } : {}),
-			...(autoSessionName ? { autoSessionName } : {}),
-			...(currentTask ? { task: { ...currentTask } } : {}),
 		});
 		stateDirty = false;
 	};
 
-	const applySessionDirective = (
-		record: Extract<UiMetaRecord, { kind: "turn_start" }>,
-	) => {
-		if (!config.sessionName.enabled || !record.session) return;
-		if (record.session.action === "keep" || manualSessionNameLocked) return;
-		const name = record.session.name;
-		if (name === pi.getSessionName()?.trim()) {
-			if (autoSessionName !== name) {
-				autoSessionName = name;
-				stateDirty = true;
-			}
-			return;
+	const applyStart = (records: UiMetaRecord[]) => {
+		if (!startOpen) return;
+		startOpen = false;
+		const record = records.find((record) => record.kind === "turn_start");
+		if (!record || record.kind !== "turn_start") return;
+		if (config.title.enabled && record.title && record.title !== currentTitle) {
+			currentTitle = record.title;
+			stateDirty = true;
+			titleController.setTaskTitle(currentTitle);
 		}
-		autoSessionName = name;
-		pendingAutoSessionName = name;
-		stateDirty = true;
-		pi.setSessionName(name);
-	};
-
-	const applyRecords = (
-		records: UiMetaRecord[],
-		allowRecap: boolean,
-	) => {
-		if (!enabledForSession || !requestActive) return;
-		for (const record of records) {
-			if (record.kind === "turn_start" && !startReceived) {
-				const titleSatisfied = !config.title.enabled || Boolean(record.title);
-				const sessionSatisfied =
-					!config.sessionName.enabled ||
-					manualSessionNameLocked ||
-					Boolean(record.session);
-				if (config.recap.enabled && !taskReceived && record.task) {
-					if (record.task.action === "set") {
-						currentTask = { name: record.task.name };
-						stateDirty = true;
-					}
-					taskReceived = Boolean(currentTask);
-				}
-				startReceived = titleSatisfied && sessionSatisfied;
-				if (config.title.enabled && record.title && record.title !== currentTitle) {
-					currentTitle = record.title;
-					stateDirty = true;
-					titleController.setTaskTitle(currentTitle);
-				}
-				applySessionDirective(record);
-				continue;
-			}
-			if (
-				record.kind === "turn_end" &&
-				allowRecap &&
-				config.recap.enabled &&
-				!recapReceived
-			) {
-				recapReceived = true;
-				pendingRecaps.push({ v: 1, text: record.recap, timestamp: Date.now() });
-			}
+		// Naming is one-shot while a name exists; manual naming never blocks titles.
+		if (config.sessionName.enabled && record.session?.action === "set" && !pi.getSessionName()?.trim()) {
+			pi.setSessionName(record.session.name);
 		}
-	};
-
-	const describeRecapMiss = (text: string): RecapMissData => {
-		const miss = diagnoseUiMetaRecapMiss(text, limits);
-		return {
-			v: 1,
-			...(miss.reason === "missing" && earlyRecapSeen
-				? { reason: "early" as const }
-				: miss),
-			timestamp: Date.now(),
-		};
 	};
 
 	pi.registerEntryRenderer<TurnRecapData>(
 		TURN_RECAP_TYPE,
-		(entry, _options, theme) =>
-			new Text(
-				theme.fg("dim", `${I_RECAP} Recap · ${entry.data?.text ?? ""}`),
-				0,
-				0,
-			),
+		(entry, _options, theme) => new Text(
+			theme.fg("dim", `${I_RECAP} Recap · ${entry.data?.text ?? ""}`), 0, 0,
+		),
 	);
 
 	pi.registerMarkdownTransformer((markdown, context) => {
@@ -349,147 +216,89 @@ export function registerUiMeta(
 	});
 
 	pi.on("session_start", (_event, ctx) => {
-		enabledForSession = ctx.mode === "tui";
-		requestActive = false;
-		requestMarker = "";
-		continueAfterCompaction = false;
-		startReceived = !startMetadataEnabled;
-		recapReceived = !config.recap.enabled;
-		currentTask = undefined;
-		taskReceived = !config.recap.enabled;
-		pendingRecaps = [];
-		pendingRecapMisses = [];
-		recapMiss = undefined;
-		earlyRecapSeen = false;
-		if (!enabledForSession) return;
-		restoreState(ctx);
+		enabledForSession = ctx.mode === "tui" && config.enabled && (startMetadataEnabled || config.recap.enabled);
+		resetRun();
+		if (enabledForSession) restoreState(ctx);
 	});
 
 	pi.on("before_agent_start", (event) => {
 		if (!enabledForSession) return;
 		flushPendingEntries();
-		const isCompactionContinuation = continueAfterCompaction && requestActive;
+		const continuation = continueAfterCompaction && requestActive;
 		continueAfterCompaction = false;
-		if (!isCompactionContinuation) {
-			taskReceived = !config.recap.enabled;
-			recapMiss = undefined;
-			earlyRecapSeen = false;
+		if (!continuation) {
+			resetRun();
+			startOpen = startMetadataEnabled && event.messageType === "user";
 		}
 		requestActive = true;
-		({ startReceived, recapReceived } = beginUiMetaRun(
-			startMetadataEnabled,
-			config.recap.enabled,
-			{ startReceived, recapReceived },
-			isCompactionContinuation,
-		));
-		requestMarker = buildRequestMarker(!startReceived, !recapReceived);
 		titleController.setWorking(true);
-		// Let Pi persist a section patch instead of forcing a new prompt head.
+		// Keep this section identical for user/custom runs. Never rewrite user history
+		// or inject live UI state into the request; Pi persists only section changes.
 		event.systemPromptOptions.sections.session_ui_meta = protocolPrompt;
-	});
-
-	pi.on("context_with_system", (event) => {
-		if (!enabledForSession || !requestActive || !requestMarker) return;
-		const messages = appendRequestToLatestUserMessage(
-			event.messages,
-			requestMarker,
-		);
-		return messages ? { messages } : undefined;
-	});
-
-	pi.on("message_update", (event) => {
-		if (!enabledForSession || !isAssistantMessage(event.message)) return;
-		applyRecords(
-			extractUiMetaRecords(assistantText(event.message), limits),
-			false,
-		);
 	});
 
 	pi.on("message_end", (event) => {
 		if (!enabledForSession || !isAssistantMessage(event.message)) return;
-		const text = assistantText(event.message);
-		const records = extractUiMetaRecords(text, limits);
-		const allowRecap = canCommitUiMetaRecap(
-			event.message.stopReason,
-			event.message.content.some((entry) => entry.type === "toolCall"),
-		);
-		const recapPending =
-			requestActive && config.recap.enabled && !recapReceived;
-		applyRecords(records, allowRecap);
-		if (recapPending) {
-			if (!allowRecap && records.some((record) => record.kind === "turn_end")) {
-				earlyRecapSeen = true;
+		const message = event.message;
+		const text = assistantText(message);
+		// Commit only finalized successful messages, never speculative streaming data.
+		if (requestActive && (message.stopReason === "stop" || message.stopReason === "toolUse")) {
+			const records = extractUiMetaRecords(text, limits);
+			applyStart(records);
+			if (config.recap.enabled && !recapReceived) {
+				const recap = records.find((record) => record.kind === "turn_end");
+				const allowRecap = canCommitUiMetaRecap(message.stopReason,
+					message.content.some((entry) => entry.type === "toolCall"));
+				if (allowRecap) {
+					if (recap?.kind === "turn_end") {
+						recapReceived = true;
+						recapIssue = undefined;
+						if (recap.recap !== lastRecap) {
+							lastRecap = recap.recap;
+							pendingRecap = { v: 1, text: recap.recap, timestamp: Date.now() };
+						}
+					} else {
+						const issue = diagnoseUiMetaRecapIssue(text, limits) ?? (earlyRecapSeen ? { reason: "early" as const } : undefined);
+						recapIssue = issue ? { v: 1, ...issue, timestamp: Date.now() } : undefined;
+					}
+				} else if (recap) {
+					earlyRecapSeen = true;
+				}
 			}
-			if (allowRecap) recapMiss = recapReceived ? undefined : describeRecapMiss(text);
 		}
-		const replacement = stripMessageMetadata(event.message);
+		const replacement = stripMessageMetadata(message);
 		return replacement ? { message: replacement } : undefined;
 	});
 
 	pi.on("agent_end", () => {
-		if (!enabledForSession) return;
-		if (recapMiss && !recapReceived) pendingRecapMisses.push(recapMiss);
-		recapMiss = undefined;
-		flushPendingEntries();
+		if (enabledForSession) flushPendingEntries();
 	});
 
 	pi.on("agent_settled", (_event, ctx) => {
 		if (!enabledForSession || !ctx.isIdle()) return;
 		flushPendingEntries();
-		requestActive = false;
-		requestMarker = "";
-		continueAfterCompaction = false;
+		resetRun();
 		titleController.setWorking(false);
 	});
 
-	pi.on("session_info_changed", (event) => {
-		if (!enabledForSession || !config.sessionName.enabled) return;
-		const name = event.name?.trim();
-		if (!name) {
-			pendingAutoSessionName = undefined;
-			autoSessionName = undefined;
-			manualSessionNameLocked = false;
-			stateDirty = true;
-		} else if (name === pendingAutoSessionName) {
-			pendingAutoSessionName = undefined;
-			autoSessionName = name;
-			manualSessionNameLocked = false;
-		} else if (config.sessionName.manualNameLocks) {
-			pendingAutoSessionName = undefined;
-			autoSessionName = undefined;
-			manualSessionNameLocked = true;
-			stateDirty = true;
-		}
-	});
-
 	pi.on("session_compact", (event) => {
-		if (!enabledForSession || !requestActive) return;
-		continueAfterCompaction = event.willRetry;
+		if (enabledForSession && requestActive) continueAfterCompaction = event.willRetry;
 	});
 
 	pi.on("session_tree", (_event, ctx) => {
 		if (!enabledForSession) return;
-		// Navigation has already selected a different branch; never flush old state into it.
-		stateDirty = false;
-		pendingRecaps = [];
-		pendingRecapMisses = [];
-		recapMiss = undefined;
-		earlyRecapSeen = false;
-		requestActive = false;
-		requestMarker = "";
-		taskReceived = !config.recap.enabled;
-		continueAfterCompaction = false;
+		// Never flush pending data from the branch we just left.
+		resetRun();
 		restoreState(ctx);
 	});
 
 	pi.on("session_shutdown", () => {
 		if (enabledForSession) flushPendingEntries();
-		currentTask = undefined;
+		resetRun();
+		stateDirty = false;
+		currentTitle = "";
+		lastRecap = undefined;
 		titleController.setWorking(false);
 		enabledForSession = false;
-		requestActive = false;
-		requestMarker = "";
-		continueAfterCompaction = false;
-		pendingAutoSessionName = undefined;
 	});
 }

@@ -45,7 +45,6 @@ export interface SessionUiConfig {
 		sessionName: {
 			enabled: boolean;
 			maxLength: number;
-			manualNameLocks: boolean;
 		};
 	};
 }
@@ -108,7 +107,6 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		sessionName: {
 			enabled: true,
 			maxLength: 48,
-			manualNameLocks: true,
 		},
 	},
 };
@@ -362,12 +360,6 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 					"uiMeta.sessionName.maxLength",
 					8,
 					100,
-					warnings,
-				),
-				manualNameLocks: booleanValue(
-					uiMetaSessionName.manualNameLocks,
-					DEFAULT_SESSION_UI_CONFIG.uiMeta.sessionName.manualNameLocks,
-					"uiMeta.sessionName.manualNameLocks",
 					warnings,
 				),
 			},

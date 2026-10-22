@@ -28,13 +28,18 @@ if (root) {
 }
 const options = { skip: !root };
 const meta = (record) => `${UI_META_SENTINEL}${JSON.stringify({ v: 1, ...record })}`;
-const start = (task = { action: "keep" }) => ({
-	kind: "turn_start", title: "Current action", session: { action: "keep" }, task,
+const start = (title = "Current action", name) => ({
+	kind: "turn_start", title, ...(name ? { session: { action: "set", name } } : {}),
 });
+const recap = (text) => ({ kind: "turn_end", recap: text });
+const userTrigger = (prompt = "Request") => ({ messageType: "user", prompt });
+const customMessage = () => ({ role: "custom", customType: "web-search-content-ready", content: "Content is ready", display: true, timestamp: 10 });
 
 function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name, mode = "tui" } = {}) {
 	const handlers = new Map();
 	const renderers = new Map();
+	const titles = [], working = [];
+	let markdown;
 	let branch = structuredClone(entries);
 	let sessionName = name;
 	const ctx = {
@@ -43,206 +48,271 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		sessionManager: { getBranch: () => branch },
 		ui: { setWidget: () => assert.fail("Recap must remain in the transcript") },
 	};
+	const emit = (event, data = {}) => handlers.get(event)?.(data, ctx);
+	const rename = (value) => { sessionName = value; emit("session_info_changed", { name: value }); };
 	registerUiMeta({
 		on: (event, handler) => handlers.set(event, handler),
 		appendEntry: (customType, data) => branch.push({ type: "custom", customType, data: structuredClone(data) }),
 		getSessionName: () => sessionName,
-		setSessionName: (value) => { sessionName = value; },
+		setSessionName: rename,
 		registerEntryRenderer: (key, renderer) => renderers.set(key, renderer),
-		registerMarkdownTransformer: () => {},
-	}, config, { setTaskTitle() {}, setWorking() {} });
-	const emit = (event, data = {}) => handlers.get(event)?.(data, ctx);
-	const message = (records, stopReason = "stop", toolCalls = false) => emit("message_end", {
+		registerMarkdownTransformer: (transform) => { markdown = transform; },
+	}, config, { setTaskTitle: (title) => titles.push(title), setWorking: (value) => working.push(value) });
+	const raw = (text, stopReason = "stop", toolCalls = false, event = "message_end") => emit(event, {
 		message: { role: "assistant", stopReason, content: [
-			{ type: "text", text: records.map(meta).join("\nAnswer\n") },
+			{ type: "text", text },
 			...(toolCalls ? [{ type: "toolCall", id: "1", name: "test", arguments: {} }] : []),
 		] },
 	});
 	emit("session_start");
 	return {
-		emit, message, handlers, ctx,
-		begin: () => {
+		emit, handlers, ctx, titles, working, raw, rename,
+		message: (records, stopReason, toolCalls) => raw(records.map(meta).join("\nAnswer\n"), stopReason, toolCalls),
+		begin: (messageType = "user") => {
 			const systemPromptOptions = { sections: {} };
-			assert.equal(emit("before_agent_start", { systemPrompt: "Base", systemPromptOptions }), undefined);
+			const trigger = messageType === "user" ? userTrigger() : { messageType: "custom", message: customMessage() };
+			assert.equal(emit("before_agent_start", { ...trigger, systemPrompt: "Base", systemPromptOptions }), undefined);
 			return systemPromptOptions;
 		},
 		end: () => { emit("agent_end"); emit("agent_settled"); },
 		entries: () => branch,
 		recaps: () => branch.filter((entry) => entry.customType === "session-ui:turn-recap").map((entry) => entry.data.text),
-		misses: () => branch.filter((entry) => entry.customType === "session-ui:recap-miss")
-			.map(({ data: { reason, snippet } }) => (snippet ? { reason, snippet } : { reason })),
-		raw: (text, stopReason = "stop", toolCalls = false) => emit("message_end", {
-			message: { role: "assistant", stopReason, content: [
-				{ type: "text", text },
-				...(toolCalls ? [{ type: "toolCall", id: "1", name: "test", arguments: {} }] : []),
-			] },
-		}),
+		misses: () => branch.filter((entry) => entry.customType === "session-ui:recap-miss").map((entry) => entry.data.reason),
 		setBranch: (entries) => { branch = structuredClone(entries); emit("session_tree"); },
+		newSession: () => { emit("session_shutdown"); branch = []; sessionName = undefined; emit("session_start"); },
 		name: () => sessionName,
+		markdown: (text, isStreaming = true) => markdown(text, { messageType: "assistant", isStreaming }),
 		render: (text) => renderers.get("session-ui:turn-recap")({ data: { text } }, {}, {
 			fg: (_color, value) => value,
 		}).render(200).join("\n"),
-		marker: () => emit("context_with_system", { messages: [{ role: "user", content: "Follow up" }] }).messages[0].content.at(-1).text,
 	};
 }
 
-test("keeps transcript placement, rendering and end timing while requesting cumulative task progress", options, () => {
+test("uses an optional static protocol without task state or request markers", options, () => {
 	const h = harness();
 	const prompt = h.begin().sections.session_ui_meta;
-	assert.match(prompt, /across all relevant conversation turns/);
-	assert.match(prompt, /NOT a report of only this agent run/);
-	assert.match(prompt, /bounded by the outcome the user wants to achieve/);
-	assert.match(prompt, /not by an individual message, tool call, action, or workflow phase/);
-	assert.match(prompt, /do not merge unrelated goals merely because they share a topic/);
-	assert.match(prompt, /Discussion, agreement, or a plan is not implementation; implementation is not verification/);
-	assert.match(prompt, /For discussion-only tasks, summarize what was clarified or decided/);
-	assert.match(prompt, /Treat suggestions as proposals unless the user accepted them/);
-	h.message([start({ action: "set", name: "Feature A" }), { kind: "turn_end", recap: "Implemented; tests pending" }]);
+	assert.match(prompt, /Metadata is optional/);
+	assert.match(prompt, /Omission means keep/);
+	assert.match(prompt, /Discussion or agreement is not implementation/);
+	assert.match(prompt, /standalone overall status/);
+	assert.match(prompt, /blocker, failure or important correction/);
+	assert.doesNotMatch(prompt, /ui_meta_request|needStart|needRecap|currentTaskName/);
+	assert.equal(h.handlers.has("context"), false);
+	assert.equal(h.handlers.has("context_with_system"), false);
+	h.raw("Understood");
+	h.end();
+	assert.deepEqual(h.entries(), []);
+	h.begin();
+	h.message([start("Review implementation", "Review goal"), recap("Design agreed; implementation pending")]);
 	assert.deepEqual(h.recaps(), []);
 	h.end();
-	assert.deepEqual(h.recaps(), ["Implemented; tests pending"]);
-	assert.equal(h.render(h.recaps()[0]).trimEnd(), "↳ Recap · Implemented; tests pending");
-	h.begin();
-	assert.match(h.marker(), /Feature A/);
-	assert.doesNotMatch(h.marker(), /Implemented; tests pending/);
-	h.message([start(), { kind: "turn_end", recap: "Implemented; regression passed; terminal unchecked" }]);
-	h.end();
-	assert.deepEqual(h.recaps(), ["Implemented; tests pending", "Implemented; regression passed; terminal unchecked"]);
-	h.begin();
-	h.message([start(), { kind: "turn_end", recap: "Implemented; regression now fails" }]);
-	h.end();
-	assert.equal(h.recaps().at(-1), "Implemented; regression now fails");
-	assert.equal(h.recaps().length, 3);
+	assert.deepEqual(h.recaps(), ["Design agreed; implementation pending"]);
+	assert.equal(h.render(h.recaps()[0]).trimEnd(), "↳ Recap · Design agreed; implementation pending");
+	assert.deepEqual(h.entries().find((entry) => entry.customType === "session-ui:ui-meta-state").data,
+		{ v: 1, title: "Review implementation" });
+	assert.equal(h.begin().sections.session_ui_meta, prompt);
 });
 
-test("does not gate valid recaps on task metadata", options, () => {
-	for (const firstStart of [start(), {
-		kind: "turn_start", title: "Current action", session: { action: "keep" },
-	}]) {
-		const h = harness();
-		h.begin();
-		h.message([firstStart, { kind: "turn_end", recap: "Current progress" }]);
-		h.end();
-		assert.deepEqual(h.recaps(), ["Current progress"]);
-	}
+test("names only unnamed sessions and preserves titles on ordinary replies", options, () => {
 	const h = harness();
 	h.begin();
-	h.message([start({ action: "set", name: "Task" }), { kind: "turn_end", recap: "Implemented" }]);
+	h.message([start("Investigate", "Initial goal")]);
 	h.end();
 	h.begin();
-	h.message([{ kind: "turn_start", title: "Current action", session: { action: "keep" } },
-		{ kind: "turn_end", recap: "Implemented; tests passed" }]);
+	h.raw("Understood");
 	h.end();
-	assert.deepEqual(h.recaps(), ["Implemented", "Implemented; tests passed"]);
-});
-
-test("preserves normal recap cadence even when the task progress is unchanged", options, () => {
-	const h = harness();
-	for (let i = 0; i < 2; i++) {
-		h.begin();
-		h.message([start(i ? { action: "keep" } : { action: "set", name: "Task" }), { kind: "turn_end", recap: "Implemented; testing pending" }]);
-		h.end();
-	}
-	assert.equal(h.recaps().length, 2);
-});
-
-test("tracks task identity independently of session naming without deleting historical recaps", options, () => {
-	const h = harness({ name: "Pinned name" });
+	assert.deepEqual(h.titles, ["", "Investigate"]);
+	assert.deepEqual(h.recaps(), []);
 	h.begin();
-	h.message([start({ action: "set", name: "Task A" }), { kind: "turn_end", recap: "A complete" }]);
+	h.message([start("Implement", "Another goal")]);
 	h.end();
-	const taskA = structuredClone(h.entries());
+	assert.equal(h.name(), "Initial goal");
+	assert.equal(h.titles.at(-1), "Implement");
+	h.rename("Pinned name");
 	h.begin();
-	h.message([start({ action: "set", name: "Task B" }), { kind: "turn_end", recap: "B blocked" }]);
+	h.message([start("Verify", "Override")]);
 	h.end();
 	assert.equal(h.name(), "Pinned name");
-	assert.deepEqual(h.recaps(), ["A complete", "B blocked"]);
-	const restored = harness({ entries: h.entries(), name: "Pinned name" });
-	restored.begin();
-	assert.match(restored.marker(), /Task B/);
-	restored.setBranch(taskA);
-	restored.begin();
-	assert.match(restored.marker(), /Task A/);
-	assert.deepEqual(restored.recaps(), ["A complete"]);
-	restored.emit("session_shutdown");
+	assert.equal(h.titles.at(-1), "Verify");
+	h.rename(undefined);
+	h.begin();
+	h.message([start("Verify", "New explicit goal")]);
+	h.end();
+	assert.equal(h.name(), "New explicit goal");
+	assert.deepEqual(h.titles, ["", "Investigate", "Implement", "Verify"]);
 });
 
-test("ignores failed and tool-bearing recaps and preserves task identity through compaction", options, () => {
+test("accepts independent title or name proposals without requiring keep records", options, () => {
+	const h = harness({ name: "Existing name" });
+	h.begin();
+	h.message([start("Inspect", "Do not overwrite")]);
+	h.end();
+	assert.equal(h.name(), "Existing name");
+	assert.equal(h.titles.at(-1), "Inspect");
+	const other = harness();
+	other.begin();
+	other.message([{ kind: "turn_start", session: { action: "set", name: "Goal" } }]);
+	other.end();
+	assert.equal(other.name(), "Goal");
+	assert.deepEqual(other.titles, [""]);
+});
+
+test("deduplicates adjacent recaps while retaining corrections and distinct results", options, () => {
+	const h = harness();
+	for (const text of ["Feature A implemented; tests pending", "Feature A implemented; tests pending",
+		"Feature A verification failed", "Feature A verified", "Feature B blocked"]) {
+		h.begin();
+		h.message([recap(text)]);
+		h.end();
+	}
+	assert.deepEqual(h.recaps(), ["Feature A implemented; tests pending", "Feature A verification failed", "Feature A verified", "Feature B blocked"]);
+	assert.deepEqual(h.misses(), []);
+});
+
+test("does not apply streaming, failed, late or repeated start metadata", options, () => {
 	const h = harness();
 	h.begin();
-	h.message([start({ action: "set", name: "Task" }), { kind: "turn_end", recap: "Invalid" }], "aborted");
-	h.message([{ kind: "turn_end", recap: "Tool result" }], "stop", true);
+	h.raw(meta(start("Speculative", "Bad name")), "stop", false, "message_update");
+	assert.deepEqual(h.titles, [""]);
+	for (const reason of ["aborted", "error", "length"]) h.message([start("Failed", "Bad name"), recap("Failed result")], reason);
+	assert.equal(h.name(), undefined);
+	h.message([start("Inspect", "Actual goal"), recap("Too early")], "toolUse", true);
+	h.message([start("Tool continuation", "Override")], "toolUse", true);
+	h.message([recap("Actual result")]);
+	h.end();
+	assert.deepEqual(h.titles, ["", "Inspect"]);
+	assert.deepEqual(h.recaps(), ["Actual result"]);
+	assert.deepEqual(h.misses(), []);
+	const stripped = h.message([start("Stale"), recap("Stale")]);
+	h.end();
+	assert.deepEqual(stripped.message.content, [{ type: "text", text: "Answer" }]);
+	assert.deepEqual(h.titles, ["", "Inspect"]);
+	h.begin();
+	h.raw("A reply with no metadata", "toolUse", true);
+	h.message([start("Too late")]);
+	h.end();
+	assert.equal(h.titles.at(-1), "Inspect");
+});
+
+test("preserves consumed title eligibility and final recap through compaction retry", options, () => {
+	for (const runType of ["user", "custom"]) {
+		const h = harness();
+		h.begin(runType);
+		h.message([start("Inspect")], "toolUse", true);
+		h.emit("session_compact", { willRetry: true });
+		h.emit("agent_end");
+		h.begin("user");
+		h.message([start("Repeated"), recap("Verified after compaction")]);
+		h.end();
+		assert.deepEqual(h.titles, runType === "user" ? ["", "Inspect"] : [""]);
+		assert.deepEqual(h.recaps(), ["Verified after compaction"]);
+	}
+	const h = harness();
+	h.begin();
+	h.raw("Truncated", "length");
 	h.emit("session_compact", { willRetry: true });
 	h.begin();
-	assert.match(h.marker(), /"needStart":false/);
-	h.message([{ kind: "turn_end", recap: "Actual task progress" }]);
+	h.message([start("Recovered"), recap("Recovered result")]);
 	h.end();
-	h.message([{ kind: "turn_end", recap: "Stale response" }]);
-	h.end();
-	assert.deepEqual(h.recaps(), ["Actual task progress"]);
+	assert.equal(h.titles.at(-1), "Recovered");
 });
 
-test("records a hidden reason when a final response yields no recap", options, () => {
+test("allows custom-run recaps but never custom-run title or name changes", options, () => {
 	const h = harness();
-	h.begin();
-	h.message([start({ action: "set", name: "Task" })]);
+	const prompt = h.begin("custom").sections.session_ui_meta;
+	h.message([start("Background title", "Background name"), recap("Background fetch failed; source unavailable")]);
 	h.end();
-	assert.deepEqual(h.misses(), [{ reason: "missing" }]);
+	assert.deepEqual(h.titles, [""]);
+	assert.equal(h.name(), undefined);
+	assert.deepEqual(h.recaps(), ["Background fetch failed; source unavailable"]);
+	assert.equal(h.begin().sections.session_ui_meta, prompt);
+	h.message([start("Research", "Research sources")]);
+	h.end();
+	assert.equal(h.name(), "Research sources");
+	assert.deepEqual(h.working, [true, false, true, false]);
+});
 
+test("restores branch-local title and recap deduplication without flushing abandoned state", options, () => {
+	const h = harness({ name: "Pinned" });
+	h.begin(); h.message([start("Task A"), recap("A verified")]); h.end();
+	const branchA = structuredClone(h.entries());
+	h.begin(); h.message([start("Task B"), recap("B blocked")]); h.end();
+	const restored = harness({ entries: h.entries(), name: h.name() });
+	assert.equal(restored.titles.at(-1), "Task B");
+	restored.begin(); restored.message([recap("B blocked")]); restored.end();
+	assert.equal(restored.recaps().length, 2);
+	restored.begin(); restored.message([start("Uncommitted"), recap("Must not leak")]);
+	restored.setBranch(branchA);
+	restored.end();
+	assert.deepEqual(restored.entries(), branchA);
+	assert.equal(restored.titles.at(-1), "Task A");
+	restored.begin(); restored.message([recap("B blocked")]); restored.end();
+	assert.deepEqual(restored.recaps(), ["A verified", "B blocked"]);
+	restored.newSession();
+	assert.equal(restored.titles.at(-1), "");
+	restored.begin(); restored.message([recap("B blocked")]); restored.end();
+	assert.deepEqual(restored.recaps(), ["B blocked"]);
+});
+
+test("records only malformed or early attempts, never an omitted recap", options, () => {
+	const h = harness();
+	h.begin(); h.raw("Understood"); h.end();
+	assert.deepEqual(h.misses(), []);
 	h.begin();
 	const replacement = h.raw(`Answer\n${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`);
 	assert.deepEqual(replacement.message.content, [{ type: "text", text: "Answer" }]);
 	h.end();
-	assert.deepEqual(h.misses().at(-1), {
-		reason: "invalid",
-		snippet: `${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`,
-	});
-
-	h.begin();
-	h.message([{ kind: "turn_end", recap: "Too early" }], "stop", true);
-	h.raw("Final answer");
-	h.end();
-	assert.equal(h.misses().at(-1).reason, "early");
-
-	h.begin();
-	h.raw(`Final answer.${meta({ kind: "turn_end", recap: "Inline progress" })}`);
-	h.end();
-	h.begin();
-	h.raw("Aborted answer", "aborted");
-	h.end();
-	assert.deepEqual(h.recaps(), ["Inline progress"]);
-	assert.equal(h.misses().length, 3);
+	assert.deepEqual(h.misses(), ["invalid"]);
+	h.begin(); h.raw(`Answer\n${meta(recap("Misplaced"))}\nTrailing text`); h.end();
+	h.begin(); h.message([recap("Too early")], "toolUse", true); h.raw("Final answer"); h.end();
+	assert.deepEqual(h.misses(), ["invalid", "misplaced", "early"]);
+	h.begin(); h.message([recap("Failed")], "aborted"); h.end();
+	h.begin(); h.raw(`Final answer.${meta(recap("Valid inline result"))}`); h.end();
+	assert.deepEqual(h.misses(), ["invalid", "misplaced", "early"]);
+	assert.deepEqual(h.recaps(), ["Valid inline result"]);
 });
 
-test("supports recap-only configuration and leaves non-TUI sessions untouched", options, () => {
+test("cleans boundary metadata while preserving normal text and tool content", options, () => {
+	const h = harness();
+	assert.equal(h.markdown(`Answer\n${UI_META_SENTINEL.slice(0, 8)}`), "Answer");
+	assert.equal(h.markdown(`${meta(start())}\nAnswer\n${meta(recap("Done"))}`), "Answer");
+	assert.equal(h.markdown('<ui_meta>{"v":1}</ui_meta>\nAnswer'), "Answer");
+	h.begin();
+	const result = h.raw(`${meta(start())}\nAnswer`, "toolUse", true);
+	assert.equal(result.message.content[0].text, "Answer");
+	assert.equal(result.message.content[1].type, "toolCall");
+});
+
+test("honors feature flags and leaves non-TUI sessions untouched", options, () => {
 	const config = structuredClone(DEFAULT_SESSION_UI_CONFIG.uiMeta);
 	config.title.enabled = false;
 	config.sessionName.enabled = false;
 	const h = harness({ config });
-	h.begin();
-	assert.match(h.marker(), /"needStart":false/);
-	h.message([{ kind: "turn_end", recap: "Latest progress" }]);
-	h.end();
+	h.begin(); h.message([start("Ignored", "Ignored"), recap("Latest progress")]); h.end();
+	assert.equal(h.name(), undefined);
+	assert.deepEqual(h.titles, [""]);
 	assert.deepEqual(h.recaps(), ["Latest progress"]);
-	for (const mode of ["rpc", "print", "json"]) {
-		const other = harness({ mode });
+	const noRecap = harness({ config: { ...config, title: { ...config.title, enabled: true }, recap: { ...config.recap, enabled: false } } });
+	noRecap.begin(); noRecap.raw(`Answer\n${UI_META_SENTINEL}{bad}`); noRecap.end();
+	assert.deepEqual(noRecap.entries(), []);
+	for (const other of [harness({ config: { ...config, enabled: false } }),
+		harness({ config: { ...config, recap: { ...config.recap, enabled: false } } }),
+		...["rpc", "print", "json"].map((mode) => harness({ mode }))]) {
 		assert.deepEqual(other.begin(), { sections: {} });
-		other.message([start({ action: "set", name: "Task" }), { kind: "turn_end", recap: "Hidden" }]);
+		assert.equal(other.message([start("Ignored"), recap("Ignored")]), undefined);
 		other.end();
 		assert.deepEqual(other.entries(), []);
 	}
 });
 
-// These tests intentionally use Pi 0.87 internals; recheck them on Pi upgrades.
-// Exercise the installed Pi transforms; only UI/session services are stubbed.
+// Installed Pi internals are test oracles only; keep these fixtures aligned on upgrades.
 function nativeRunner(h, contextHandler) {
 	const extensions = [{
 		path: "session-ui",
 		handlers: new Map([...h.handlers].map(([event, handler]) => [event, [handler]])),
 	}];
 	if (contextHandler) extensions.push({
-		path: "tool-result-rewriter",
-		handlers: new Map([["context", [contextHandler]]]),
+		path: "tool-result-rewriter", handlers: new Map([["context", [contextHandler]]]),
 	});
 	const runner = new ExtensionRunner(extensions, {}, process.cwd(), {}, {});
 	runner.createContext = () => h.ctx;
@@ -278,106 +348,108 @@ function transcript() {
 	];
 }
 
-test("uses a stable protocol section without forcing the prompt or duplicating patches", options, async () => {
+test("keeps the entire prior input prefix across normal turns, tools and idle custom runs", options, async () => {
 	const h = harness();
-	assert.equal(h.handlers.has("context"), false);
 	const runner = nativeRunner(h);
-	const base = { cwd: process.cwd(), customPrompt: "Base", sections: { other: "Keep this section" } };
-	const first = await runner.emitBeforeAgentStart("First request", undefined, base);
+	const base = { cwd: process.cwd(), customPrompt: "Base", selectedTools: [], sections: { other: "Keep" } };
+	const first = await runner.emitBeforeAgentStart(userTrigger(), base);
+	const sections = buildSystemPromptSections(first.systemPromptOptions);
 	assert.equal(first.systemPromptOptions.forceSystemPrompt, undefined);
-	assert.equal(first.systemPromptOptions.sections.other, "Keep this section");
-	assert.match(first.systemPromptOptions.sections.session_ui_meta, /Session UI metadata protocol/);
-	const before = buildSystemPromptSections(base);
-	const after = buildSystemPromptSections(first.systemPromptOptions);
-	assert.deepEqual(Object.keys(diffSystemPromptSections(before, after)), ["session_ui_meta"]);
-	h.end();
-	const second = await runner.emitBeforeAgentStart("Next request", undefined, base);
-	assert.equal(diffSystemPromptSections(after, buildSystemPromptSections(second.systemPromptOptions)), undefined);
-	assert.deepEqual(base.sections, { other: "Keep this section" });
+	assert.deepEqual(Object.keys(diffSystemPromptSections(buildSystemPromptSections(base), sections)), ["session_ui_meta"]);
+	let history = transcript();
+	const original = structuredClone(history);
+	const firstInput = await requestTransform(runner, first.systemPromptOptions)(history);
+	assert.deepEqual(firstInput, original);
+	h.message([start("Inspect", "Goal")], "toolUse", true);
+	history = [...history, { role: "toolResult", toolCallId: "call-2", toolName: "read", content: [{ type: "text", text: "More data" }], isError: false, timestamp: 6 }];
+	assert.deepEqual((await requestTransform(runner, first.systemPromptOptions)(history)).slice(0, firstInput.length), firstInput);
+	h.message([recap("Verified")]); h.end();
+	const beforeNextTurn = structuredClone(history);
+	history.push({ role: "user", content: "Understood", timestamp: 7 });
+	const second = await runner.emitBeforeAgentStart(userTrigger("Understood"), base);
+	assert.equal(diffSystemPromptSections(sections, buildSystemPromptSections(second.systemPromptOptions)), undefined);
+	assert.deepEqual((await requestTransform(runner, second.systemPromptOptions)(history)).slice(0, beforeNextTurn.length), beforeNextTurn);
+	h.raw("Acknowledged"); h.end();
+	const beforeCustom = structuredClone(history);
+	await AgentSession.prototype.sendCustomMessage.call({
+		isStreaming: false,
+		async _startRun(trigger) {
+			assert.equal(trigger.messageType, "custom");
+			const next = await runner.emitBeforeAgentStart(trigger, base);
+			assert.equal(diffSystemPromptSections(sections, buildSystemPromptSections(next.systemPromptOptions)), undefined);
+			const input = await requestTransform(runner, next.systemPromptOptions)([...history, trigger.message]);
+			assert.deepEqual(input.slice(0, beforeCustom.length), beforeCustom);
+			assert.deepEqual(input.at(-1), trigger.message);
+		},
+	}, customMessage(), { triggerTurn: true });
+	assert.deepEqual(base.sections, { other: "Keep" });
+	assert.deepEqual(history.slice(0, original.length), original);
+	assert.doesNotMatch(JSON.stringify(history), /ui_meta_request/);
 });
 
-test("preserves the full system and tool prefix through native request transforms", options, async () => {
-	const h = harness();
-	const runner = nativeRunner(h);
-	const { systemPromptOptions } = await runner.emitBeforeAgentStart("Request", undefined, { cwd: process.cwd() });
-	const transform = requestTransform(runner, systemPromptOptions);
-	const messages = transcript();
-	const original = structuredClone(messages);
-	const direct = h.emit("context_with_system", { messages });
-	assert.deepEqual(messages, original);
-	assert.notEqual(direct.messages, messages);
-	assert.equal(direct.messages[0], messages[0]);
-	assert.equal(direct.messages[2], messages[2]);
-	const result = await transform(messages);
-	assert.deepEqual(result.slice(0, 3), original.slice(0, 3));
-	assert.deepEqual(result[3].content.slice(0, 2), original[3].content);
-	assert.match(result[3].content.at(-1).text, /<ui_meta_request>/);
-	assert.deepEqual(result[4], original[4]);
-	assert.deepEqual(messages, original);
-	assert.deepEqual(await transform(messages), result);
-	h.end();
-	assert.deepEqual(await transform(messages), original);
-	assert.deepEqual(await transform([original[0]]), [original[0]]);
+test("busy custom notifications queue without reopening title eligibility", options, async () => {
+	const h = harness(); h.begin(); h.message([start("Inspect")], "toolUse", true);
+	let queued;
+	await AgentSession.prototype.sendCustomMessage.call({
+		isStreaming: true, agent: { steer: (message) => { queued = message; } },
+		_startRun: () => assert.fail("Busy custom messages must queue"),
+	}, customMessage(), { triggerTurn: true });
+	assert.equal(queued.role, "custom");
+	h.message([start("Background"), recap("Background result confirmed")]); h.end();
+	assert.deepEqual(h.titles, ["", "Inspect"]);
+	assert.deepEqual(h.recaps(), ["Background result confirmed"]);
 });
 
-test("keeps restored prompt and tools when an earlier context phase rewrites observations", options, async () => {
+test("preserves Pi prompt and tool restoration when another extension rewrites observations", options, async () => {
 	const h = harness();
-	const rewrite = (event) => {
+	const runner = nativeRunner(h, (event) => {
 		assert.ok(event.messages.every((message) => message.role !== "system"));
 		return { messages: event.messages.map((message) => message.role === "toolResult"
-			? { ...message, content: [{ type: "text", text: "Observation placeholder" }] }
-			: message) };
-	};
-	const runner = nativeRunner(h, rewrite);
-	const { systemPromptOptions } = await runner.emitBeforeAgentStart("Request", undefined, { cwd: process.cwd() });
+			? { ...message, content: [{ type: "text", text: "Observation placeholder" }] } : message) };
+	});
+	const { systemPromptOptions } = await runner.emitBeforeAgentStart(userTrigger(), { cwd: process.cwd() });
 	const messages = transcript();
 	const result = await requestTransform(runner, systemPromptOptions)(messages);
 	assert.equal(result.filter((message) => message.role === "system").length, 1);
 	assert.equal(result[0].sections.preamble, "Base");
 	assert.equal(result[0].sections.project, "Updated project rules");
 	assert.deepEqual(result[0].toolsAdded.map((tool) => tool.name), ["read", "search"]);
-	assert.match(result.findLast((message) => message.role === "user").content.at(-1).text, /<ui_meta_request>/);
+	assert.deepEqual(result.findLast((message) => message.role === "user"), messages[3]);
 	assert.equal(result.at(-1).content[0].text, "Observation placeholder");
 });
 
 function preparePrompt(options, messages) {
-	const host = { _toolRegistry: new Map(), agent: { state: {} } };
+	const host = { _toolRegistry: new Map(), _applyToolLoadout: AgentSession.prototype._applyToolLoadout, agent: { state: {} } };
 	return AgentSession.prototype._preparePromptAndToolLoadout.call(host, options, messages);
 }
 
-test("delivers the protocol patch and recreates it when the retained context lacks it", options, async () => {
-	const h = harness();
-	const runner = nativeRunner(h);
+test("persists one static section and recreates it after compaction without editing retained messages", options, async () => {
+	const runner = nativeRunner(harness());
 	const base = { cwd: process.cwd(), customPrompt: "Base", selectedTools: [] };
-	const { systemPromptOptions } = await runner.emitBeforeAgentStart("Request", undefined, base);
+	const { systemPromptOptions } = await runner.emitBeforeAgentStart(userTrigger(), base);
 	const retained = [
 		{ role: "system", content: "", sections: buildSystemPromptSections(base), timestamp: 1 },
 		{ role: "user", content: "Request or retained compaction summary", timestamp: 2 },
 	];
 	const patch = preparePrompt(systemPromptOptions, retained);
 	assert.deepEqual(Object.keys(patch.sections), ["session_ui_meta"]);
-	assert.match(patch.sections.session_ui_meta, /Session UI metadata protocol/);
 	const history = [...retained, patch];
-	const request = await requestTransform(runner, systemPromptOptions)(history);
-	assert.deepEqual(request[0], retained[0]);
-	assert.deepEqual(request.at(-1), patch);
-	assert.match(request[1].content.at(-1).text, /<ui_meta_request>/);
-	assert.equal(typeof history[1].content, "string");
+	assert.deepEqual(await requestTransform(runner, systemPromptOptions)(history), history);
 	assert.equal(preparePrompt(systemPromptOptions, history), undefined);
 	assert.deepEqual(preparePrompt(systemPromptOptions, retained).sections, patch.sections);
 });
 
-test("removes the persisted protocol when resuming outside TUI and restores it on return", options, async () => {
+test("removes the protocol outside TUI and restores it on return without injecting recaps", options, async () => {
 	const base = { cwd: process.cwd(), customPrompt: "Base", selectedTools: [] };
 	const tui = nativeRunner(harness());
-	const { systemPromptOptions: tuiOptions } = await tui.emitBeforeAgentStart("Request", undefined, base);
+	const { systemPromptOptions: tuiOptions } = await tui.emitBeforeAgentStart(userTrigger(), base);
 	const history = [
 		{ role: "system", content: "", sections: buildSystemPromptSections(tuiOptions), timestamp: 1 },
 		{ role: "user", content: "Resume", timestamp: 2 },
 	];
 	for (const mode of ["rpc", "print", "json"]) {
 		const runner = nativeRunner(harness({ mode }));
-		const { systemPromptOptions } = await runner.emitBeforeAgentStart("Resume", undefined, base);
+		const { systemPromptOptions } = await runner.emitBeforeAgentStart(userTrigger("Resume"), base);
 		assert.equal(systemPromptOptions.sections.session_ui_meta, undefined);
 		const removal = preparePrompt(systemPromptOptions, history);
 		assert.deepEqual(removal.sections, { session_ui_meta: null });

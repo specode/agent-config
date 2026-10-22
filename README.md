@@ -82,6 +82,8 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
 | `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
 
+session-ui 的标题和 Recap 按实质变化可选生成，不要求每轮输出；自动命名只补充未命名会话。它复用正常回答，不额外调用模型，也不向用户消息注入动态请求标记。
+
 涉及账号、浏览器或系统权限的插件，需自行完成授权和依赖配置。
 
 仓库默认不提供自动审批能力。

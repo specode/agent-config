@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-	beginUiMetaRun,
 	canCommitUiMetaRecap,
-	diagnoseUiMetaRecapMiss,
+	diagnoseUiMetaRecapIssue,
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
@@ -18,19 +17,6 @@ const limits: UiMetaLimits = {
 };
 
 const meta = (record: object) => `${UI_META_SENTINEL}${JSON.stringify(record)}`;
-
-test("preserves protocol progress only for compaction continuations", () => {
-	const previous = { startReceived: true, recapReceived: false };
-	assert.deepEqual(beginUiMetaRun(true, true, previous, true), previous);
-	assert.deepEqual(beginUiMetaRun(true, true, previous, false), {
-		startReceived: false,
-		recapReceived: false,
-	});
-	assert.deepEqual(beginUiMetaRun(false, false, previous, false), {
-		startReceived: true,
-		recapReceived: true,
-	});
-});
 
 test("commits recap only for a successful tool-free final response", () => {
 	assert.equal(canCommitUiMetaRecap("stop", false), true);
@@ -70,21 +56,13 @@ test("extracts typed start and end records from sentinel lines", () => {
 	]);
 });
 
-test("accepts independent task directives and task progress recaps", () => {
-	assert.deepEqual(extractUiMetaRecords([
-		meta({ v: 1, kind: "turn_start", task: { action: "set", name: "Feature\u001b[31m A" } }),
-		"Explanation only",
-		meta({ v: 1, kind: "turn_end", recap: "Implemented; tests pending" }),
-	].join("\n"), limits), [
-		{ v: 1, kind: "turn_start", task: { action: "set", name: "Feature A" } },
-		{ v: 1, kind: "turn_end", recap: "Implemented; tests pending" },
-	]);
+test("ignores task fields and accepts independent title proposals", () => {
 	assert.deepEqual(extractUiMetaRecords(meta({
-		v: 1, kind: "turn_start", task: { action: "keep" },
-	}), limits), [{ v: 1, kind: "turn_start", task: { action: "keep" } }]);
-	for (const task of [{ action: "set" }, { action: "set", name: " " }, { action: "unknown" }]) {
-		assert.deepEqual(extractUiMetaRecords(meta({ v: 1, kind: "turn_start", task }), limits), []);
-	}
+		v: 1, kind: "turn_start", task: { action: "set", name: "Ignored" },
+	}), limits), []);
+	assert.deepEqual(extractUiMetaRecords(meta({
+		v: 1, kind: "turn_start", title: "Inspect", task: { action: "set", name: "Ignored" },
+	}), limits), [{ v: 1, kind: "turn_start", title: "Inspect" }]);
 });
 
 test("accepts keep and ignores malformed or unsupported records", () => {
@@ -200,17 +178,14 @@ test("hides an unfinished inline end record only while it is incomplete", () => 
 	assert.equal(stripUiMetaBlocks("Mail me @@", true), "Mail me @@");
 });
 
-test("diagnoses why a final response produced no recap", () => {
+test("diagnoses malformed attempts but treats omission and valid recaps as normal", () => {
 	const start = meta({ v: 1, kind: "turn_start", title: "Test" });
+	assert.equal(diagnoseUiMetaRecapIssue(`${start}\nNormal response`, limits), undefined);
+	assert.equal(diagnoseUiMetaRecapIssue(start, limits), undefined);
+	assert.equal(diagnoseUiMetaRecapIssue("Understood", limits), undefined);
+	assert.equal(diagnoseUiMetaRecapIssue(meta({ v: 1, kind: "turn_end", recap: "Done" }), limits), undefined);
 	assert.deepEqual(
-		diagnoseUiMetaRecapMiss(`${start}\nNormal response`, limits),
-		{ reason: "missing" },
-	);
-	assert.deepEqual(diagnoseUiMetaRecapMiss(start, limits), {
-		reason: "missing",
-	});
-	assert.deepEqual(
-		diagnoseUiMetaRecapMiss(
+		diagnoseUiMetaRecapIssue(
 			`Normal response\n${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"a"b"}`,
 			limits,
 		),
@@ -220,7 +195,7 @@ test("diagnoses why a final response produced no recap", () => {
 		},
 	);
 	assert.deepEqual(
-		diagnoseUiMetaRecapMiss(
+		diagnoseUiMetaRecapIssue(
 			`Normal response\n${meta({ v: 1, kind: "turn_end", recap: "Done" })}\nTrailing prose`,
 			limits,
 		),
@@ -229,10 +204,7 @@ test("diagnoses why a final response produced no recap", () => {
 			snippet: meta({ v: 1, kind: "turn_end", recap: "Done" }),
 		},
 	);
-	const long = diagnoseUiMetaRecapMiss(
-		`Normal response\n${UI_META_SENTINEL}${"x".repeat(400)}`,
-		limits,
-	);
-	assert.equal(long.reason, "invalid");
-	assert.equal(long.reason === "invalid" && Array.from(long.snippet).length, 160);
+	const long = diagnoseUiMetaRecapIssue(`Normal response\n${UI_META_SENTINEL}${"x".repeat(400)}`, limits);
+	assert.equal(long?.reason, "invalid");
+	assert.equal(Array.from(long?.snippet ?? "").length, 160);
 });

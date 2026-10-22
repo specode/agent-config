@@ -60,6 +60,27 @@ test("default statusline hides MCP without a public native connection status", (
 	assert.ok(config.statusline.extensionStatuses.exclude.includes("mcp"));
 });
 
+test("loads optional UI metadata controls and name length limits", () => {
+	assert.deepEqual(withConfig({}).config.uiMeta, {
+		enabled: true,
+		title: { enabled: true, maxLength: 36 },
+		recap: { enabled: true, maxLength: 120 },
+		sessionName: { enabled: true, maxLength: 48 },
+	});
+	const loaded = withConfig({ uiMeta: {
+		title: { enabled: false },
+		recap: { maxLength: 80 },
+		sessionName: { enabled: false, maxLength: 60 },
+	} });
+	assert.deepEqual(loaded.config.uiMeta, {
+		enabled: true,
+		title: { enabled: false, maxLength: 36 },
+		recap: { enabled: true, maxLength: 80 },
+		sessionName: { enabled: false, maxLength: 60 },
+	});
+	assert.deepEqual(loaded.warnings, []);
+});
+
 test("loads the integrated workAnimation config", () => {
 	const loaded = withConfig({
 		workAnimation: {

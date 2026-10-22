@@ -10,7 +10,7 @@ test("native text paste and image labels against installed Pi", { skip: !root },
 	const require = createRequire(resolve(root, "package.json"));
 	const { createJiti } = require("jiti");
 	const corePath = resolve(root, "dist/index.js");
-	const tuiPath = resolve(root, "node_modules/@earendil-works/pi-tui/dist/index.js");
+	const tuiPath = require.resolve("@earendil-works/pi-tui");
 	const jiti = createJiti(import.meta.url, {
 		moduleCache: false,
 		fsCache: false,

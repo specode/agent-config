@@ -26,7 +26,11 @@ test("read-only projection agrees with installed Pi native footer", { skip: !roo
 		const snapshot = JSON.stringify(entries);
 		const session = {
 			state: {},
-			sessionManager: { getEntries: () => entries, getCwd: () => "/tmp", getSessionName: () => undefined },
+			sessionManager: {
+				getEntries: () => entries, getEntryCount: () => entries.length,
+				getSessionId: () => "test", getLeafId: () => null,
+				getCwd: () => "/tmp", getSessionName: () => undefined,
+			},
 			getContextUsage: () => undefined,
 		};
 		const footer = new FooterComponent(session, {
