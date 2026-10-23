@@ -22,7 +22,6 @@
 	"packages": [
 		"npm:pi-web-access",
 		"npm:@juicesharp/rpiv-ask-user-question",
-		"npm:pi-lens",
 		"npm:@specode/pi-kimi-cu",
 		"npm:@specode/pi-kimi-webbridge-bootstrap",
 		"npm:@specode/pi-last-model-effort",

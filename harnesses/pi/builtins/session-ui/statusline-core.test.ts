@@ -84,7 +84,7 @@ test("priority compacts low-priority items before removing them", () => {
 test("extension status filters support exact ids and star wildcards", () => {
 	assert.equal(matchesStatusPattern("mcp-kimi-cu", "mcp-*"), true);
 	assert.equal(matchesStatusPattern("fast", "fast"), true);
-	assert.equal(matchesStatusPattern("pi-lens-lsp", "mcp-*"), false);
+	assert.equal(matchesStatusPattern("fast", "mcp-*"), false);
 	assert.equal(
 		isExtensionStatusExcluded("mcp-kimi-cu", ["fast", "mcp-*"]),
 		true,

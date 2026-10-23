@@ -116,7 +116,6 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"builtins/fast/index.ts": ".pi/agent/extensions/fast/index.ts",
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
-		"plugin-configs/pi-lens/config.json": ".pi-lens/config.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
 	};
@@ -138,6 +137,9 @@ test("maps the three source categories to Pi runtime paths without installing in
 	assert.equal(settings.theme, "system");
 	assert.deepEqual(settings.defaultTools, ["+codemode"]);
 	assert.equal(settings.packages.includes("npm:pi-subagents"), false);
+	assert.equal(settings.packages.includes("npm:pi-lens"), false);
+	assert.equal(existsSync(join(f.home, ".pi-lens")), false);
+	assert.equal(existsSync(join(ROOT, "harnesses/pi/plugin-configs/pi-lens")), false);
 	assert.equal(Object.hasOwn(settings, "subagents"), false);
 	for (const path of ["extensions/subagent", "profiles/pi-subagents", "pi-subagents"]) {
 		assert.equal(existsSync(join(f.agentDir, path)), false, path);

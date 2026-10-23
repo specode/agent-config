@@ -80,7 +80,6 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		],
 		extensionStatuses: {
 			exclude: [
-				"pi-lens-lsp",
 				"fast",
 				"mcp",
 				"mcp-*",

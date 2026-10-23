@@ -65,7 +65,6 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 | 插件 | 用途 | 使用示例／入口 |
 | --- | --- | --- |
 | `rpiv-ask-user-question` | 结构化提问 | 需要选择方案时，在选项界面作答 |
-| `pi-lens` | 代码分析与导航 | “查找这个函数的定义和调用方” |
 | `pi-fff` | 文件与内容搜索 | “找到登录相关文件” |
 | `pi-web-access` | 网页搜索与读取 | “查一下官方文档中的用法” |
 | `pi-kimi-cu` | macOS 桌面操作 | 指定应用和需要执行的操作 |
@@ -134,7 +133,6 @@ Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravi
 | 配置 | 安装后位置 |
 | --- | --- |
 | [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) | `~/.pi/agent/web-search.json` |
-| [代码分析](harnesses/pi/plugin-configs/pi-lens/config.json) | `~/.pi-lens/config.json` |
 | [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) | `~/.pi/agent/pi-fff.json` |
 
 ### Claude Code
