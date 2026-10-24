@@ -74,30 +74,14 @@ test("installs the remaining model order without Claude Bridge", (t) => {
 	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), false);
 });
 
-test("declares interactive shell and enables Jev without managing its runtime or credentials", (t) => {
+test("does not declare or deploy interactive shell", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
-	assert.equal(settings.packages.filter(source => source === "npm:pi-interactive-shell").length, 1);
-	const target = join(f.agentDir, "interactive-shell.json");
-	assert.equal(lstatSync(target).isSymbolicLink(), false);
-	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), { jev: { enabled: true } });
+	assert.equal(settings.packages.includes("npm:pi-interactive-shell"), false);
+	assert.equal(existsSync(join(f.agentDir, "interactive-shell.json")), false);
 	assert.equal(existsSync(join(f.agentDir, "npm/node_modules/pi-interactive-shell")), false);
-	assert.deepEqual(calls(f), []);
-});
-
-test("interactive shell config conflicts require consent and preserve the previous config", (t) => {
-	const f = fixture(t);
-	const target = join(f.agentDir, "interactive-shell.json");
-	const previous = '{"jev":{"enabled":false},"overlayHeightPercent":80}\n';
-	writeFileSync(target, previous);
-	assertSuccess(install(f, { input: "n\n" }));
-	assert.equal(readFileSync(target, "utf8"), previous);
-	assert.equal(existsSync(join(f.home, ".agent-config-backups")), false);
-	assertSuccess(install(f));
-	assert.equal(readFileSync(join(backupAgent(f), "interactive-shell.json"), "utf8"), previous);
-	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), { jev: { enabled: true } });
-	assertSuccess(install(f));
+	assert.equal(existsSync(join(ROOT, "harnesses/pi/plugin-configs/interactive-shell")), false);
 	assert.deepEqual(calls(f), []);
 });
 
@@ -145,7 +129,6 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
-		"plugin-configs/interactive-shell/config.json": ".pi/agent/interactive-shell.json",
 	};
 	for (const [source, target] of Object.entries(files)) {
 		assert.equal(
@@ -234,8 +217,6 @@ test("replaces managed plugin directories only after consent and backs up obsole
 test("rolls back models, code and composed config if deployment fails", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
-	const oldShellConfig = '{"jev":{"enabled":false}}\n';
-	writeFileSync(join(f.agentDir, "interactive-shell.json"), oldShellConfig);
 	const oldModels = '{"providers":{}}\n';
 	writeFileSync(join(f.agentDir, "models.json"), oldModels);
 	const target = join(f.agentDir, "extensions/session-ui");
@@ -258,7 +239,6 @@ process.exit(result.status ?? 1);
 	assert.notEqual(result.status, 0);
 	assert.match(result.stderr, /安装失败/);
 	assert.equal(readFileSync(join(f.agentDir, "models.json"), "utf8"), oldModels);
-	assert.equal(readFileSync(join(f.agentDir, "interactive-shell.json"), "utf8"), oldShellConfig);
 	assert.equal(existsSync(join(target, "index.ts")), false);
 	assert.equal(readFileSync(join(target, "config.json"), "utf8"), oldConfig);
 	assert.equal(readFileSync(join(target, "obsolete.ts"), "utf8"), "old module\n");
@@ -338,6 +318,7 @@ test("installs web-search.json into the Pi agent directory", (t) => {
 test("leaves unmanaged files, packages, caches and old configs untouched", (t) => {
  const f = fixture(t);
  const paths = [
+  ".pi/agent/interactive-shell.json",
   ".pi/agent/claude-bridge.json", ".pi/agent/extensions/session-ui.ts",
   ".pi/agent/extensions/openai-fast/index.ts", ".pi/agent/extensions/openai-fast.json",
   ".pi/agent/extensions/work-animation.ts", ".pi/agent/extensions/work-animation.json",
@@ -347,7 +328,7 @@ test("leaves unmanaged files, packages, caches and old configs untouched", (t) =
   ".pi/agent/git/github.com/NVlabs/SoL-Pi/index.ts",
   ".pi/agent/sessions/project/sol-pi/cache", ".pi/agent/auth.json",
   ".pi/agent/npm/package.json", ".pi/agent/npm/package-lock.json",
-  ...["@diegopetrucci/pi-openai-fast", "pi-mcp-adapter", "pi-subagents", "pi-claude-bridge"]
+  ...["@diegopetrucci/pi-openai-fast", "pi-mcp-adapter", "pi-subagents", "pi-claude-bridge", "pi-interactive-shell"]
    .map(name => `.pi/agent/npm/node_modules/${name}/index.ts`),
  ];
  for (const path of paths) {
