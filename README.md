@@ -26,6 +26,7 @@
 
 - 配置不会与现有设置逐项合并。
 - Pi 的 Fast 默认关闭，支持 OpenAI／Codex 订阅与 Grok 4.7；开启可能增加额度消耗。
+- Pi 的 Interactive Shell 已允许使用 Jev；具体任务启用语义监督后会向 TypeSafe 发送有限终端文本并调用其 API，需提供环境变量 `TYPESAFE_API_KEY`。
 - Claude Code 默认使用 `auto` 权限模式。
 
 ## 使用说明
@@ -65,6 +66,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 | 插件 | 用途 | 使用示例／入口 |
 | --- | --- | --- |
 | `rpiv-ask-user-question` | 结构化提问 | 需要选择方案时，在选项界面作答 |
+| [pi-interactive-shell](https://github.com/nicobailon/pi-interactive-shell) | 交互式终端、后台任务与子 Agent | 自然语言要求运行命令，或用 `/spawn`、`/attach`、`/dismiss` |
 | `pi-fff` | 文件与内容搜索 | “找到登录相关文件” |
 | `pi-web-access` | 网页搜索与读取 | “查一下官方文档中的用法” |
 | `pi-kimi-cu` | macOS 桌面操作 | 指定应用和需要执行的操作 |
@@ -81,7 +83,7 @@ Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技
 | `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
 | `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
 
-session-ui 的标题和 Recap 按实质变化可选生成，不要求每轮输出；自动命名只补充未命名会话。它复用正常回答，不额外调用模型，也不向用户消息注入动态请求标记。
+session-ui 的标题按实质变化可选生成，不要求每轮输出；自动命名只补充未命名会话。它复用正常回答，不额外调用模型，也不向用户消息注入动态请求标记。
 
 涉及账号、浏览器或系统权限的插件，需自行完成授权和依赖配置。
 
@@ -125,6 +127,20 @@ Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravi
 - session-ui：修改 `~/.pi/agent/extensions/session-ui/config.json`，详见[功能与配置说明](harnesses/pi/builtins/session-ui/README.md)。
 - 关闭 Fast：在 Pi 里对该 provider 执行 `/fast off`，选择保存在 `~/.pi/agent/state/fast.json`。`~/.pi/agent/extensions/fast.json` 的 `enabled` 只是还没设过开关时的默认值。
 - `fast` 标记只表示开关已启用并已装上，不代表后端已确认加速。
+
+**交互式终端**
+
+`pi-interactive-shell` 不锁定包版本，随包加载核心 skill，不额外安装示例工作流。除开启 Jev 外，其余配置沿用上游默认值。首次部署仓库配置后，在本地执行 `pi install npm:pi-interactive-shell`，再 `/reload` 或重启 Pi。
+
+- `/spawn` 打开新的 Pi 子会话；`/spawn codex` 或 `/spawn claude` 启动对应 CLI（需自行安装并登录）。
+- `/attach` 查看并接回后台会话；`/dismiss` 清理会话。
+- 终端浮层内 `Ctrl+B` 转后台，`Ctrl+T` 将输出交给主 Agent，`Ctrl+Q` 打开会话菜单。
+- 并行修改代码时使用 `--worktree` 隔离，例如 `/spawn codex --worktree`；默认在当前目录运行。
+- [插件配置](harnesses/pi/plugin-configs/interactive-shell/config.json) → `~/.pi/agent/interactive-shell.json`，由安装器整文件托管。
+
+Jev 用于识别等待输入、审批、结果就绪和阻塞等终端状态。仓库个人配置开启 `jev.enabled`，不固定模型版本，也不配置自动输入或审批。启动 Pi 的环境须提供 `TYPESAFE_API_KEY`，不要把 Key 写进仓库或插件配置。
+
+全局开关不会让所有 `/spawn` 自动接受监督。可直接说“用 Jev 观察这个子 Agent，等它需要输入或给出结果时通知我，不自动操作”；Agent 在该任务的 `interactive_shell` 调用中设置 `monitor.semantic.attention: true` 才启用这些通知。终端片段会发送到 TypeSafe，产生额外 API 调用；不要对包含敏感信息的终端随意启用。配置修改后 `/reload`，若刚设置环境变量则重启 Pi。
 
 **搜索**
 

@@ -35,9 +35,7 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	if (config.turnDuration.enabled) registerTurnDuration(pi);
 	if (
 		config.uiMeta.enabled &&
-		(config.uiMeta.title.enabled ||
-			config.uiMeta.recap.enabled ||
-			config.uiMeta.sessionName.enabled)
+		(config.uiMeta.title.enabled || config.uiMeta.sessionName.enabled)
 	) {
 		registerUiMeta(pi, config.uiMeta, titleController);
 	}

@@ -4,25 +4,18 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Text } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import {
-	canCommitUiMetaRecap,
-	diagnoseUiMetaRecapIssue,
 	extractUiMetaRecords,
 	sanitizeUiMetaText,
 	stripUiMetaBlocks,
 	UI_META_SENTINEL,
 	type UiMetaLimits,
-	type UiMetaRecapIssue,
 	type UiMetaRecord,
 } from "./ui-meta-core.ts";
 import type { SessionTitleController } from "./title-controller.ts";
 
 const UI_META_STATE_TYPE = "session-ui:ui-meta-state";
-const TURN_RECAP_TYPE = "session-ui:turn-recap";
-const RECAP_MISS_TYPE = "session-ui:recap-miss";
-const I_RECAP = "↳";
 
 type UiMetaConfig = SessionUiConfig["uiMeta"];
 
@@ -30,20 +23,6 @@ interface UiMetaStateData {
 	v: 1;
 	title?: string;
 }
-
-interface TurnRecapData {
-	v: 1;
-	text: string;
-	timestamp: number;
-}
-
-/** Only attempted but invalid or premature recaps need diagnostics. */
-type RecapIssueData = {
-	v: 1;
-	reason: UiMetaRecapIssue["reason"] | "early";
-	snippet?: string;
-	timestamp: number;
-};
 
 function isAssistantMessage(
 	message: AgentMessage,
@@ -101,14 +80,6 @@ ${config.sessionName.enabled
 			: "- Do not include session; automatic naming is disabled."}`
 		: "Do not emit turn_start metadata; title and automatic naming are disabled."}
 
-${config.recap.enabled
-		? `Only when the final tool-free answer establishes a significant conclusion, completed result, blocker, failure or important correction, you may append one single-line ${UI_META_SENTINEL}{"v":1,"kind":"turn_end","recap":"..."} record. Omit it for acknowledgements, routine progress, questions without a new conclusion, and restatements. Important background results may warrant a recap, but not a new title or session name.
-- Recap is a standalone overall status of the current user goal across relevant turns, at most ${config.recap.maxLength} visible characters; not merely the latest reply or an incremental update. Include the most important still-valid result and unresolved blocker or verification gap.
-- Clarification, planning, implementation, tests and corrections can serve the same goal. When the goal changes, do not carry over unrelated accomplishments. No separate task record is needed.
-- Distinguish proposed, agreed, implemented and verified work. Discussion or agreement is not implementation; implementation is not verification. Do not claim tests ran or succeeded without evidence. Correct superseded conclusions.
-- Recaps are not fed back to the model as evidence. Never assume an earlier recap proves a result.`
-		: "Do not emit turn_end metadata; recap is disabled."}
-
 Put records on their own physical lines, with no XML tags, closing marker, code fences or explanation. Use the latest real user's language and no trailing punctuation. Exclude secrets, credentials, full paths and terminal control characters. Do not repeat start metadata after tool results. Metadata must not alter, delay or replace the normal answer.`;
 }
 
@@ -119,7 +90,6 @@ export function registerUiMeta(
 ): void {
 	const limits: UiMetaLimits = {
 		title: config.title.maxLength,
-		recap: config.recap.maxLength,
 		sessionName: config.sessionName.maxLength,
 	};
 	const protocolPrompt = buildProtocolPrompt(config);
@@ -129,56 +99,34 @@ export function registerUiMeta(
 	let requestActive = false;
 	let startOpen = false;
 	let continueAfterCompaction = false;
-	let recapReceived = false;
 	let currentTitle = "";
-	let lastRecap: string | undefined;
 	let stateDirty = false;
-	let pendingRecap: TurnRecapData | undefined;
-	let recapIssue: RecapIssueData | undefined;
-	let earlyRecapSeen = false;
 
 	const resetRun = () => {
 		requestActive = false;
 		startOpen = false;
 		continueAfterCompaction = false;
-		recapReceived = false;
-		pendingRecap = undefined;
-		recapIssue = undefined;
-		earlyRecapSeen = false;
 	};
 
 	const restoreState = (ctx: ExtensionContext) => {
 		currentTitle = "";
-		lastRecap = undefined;
-		let foundTitle = false;
 		const branch = ctx.sessionManager.getBranch();
 		for (let i = branch.length - 1; i >= 0; i--) {
 			const entry = branch[i];
 			if (entry?.type !== "custom" || !entry.data || typeof entry.data !== "object") continue;
-			if (entry.customType === UI_META_STATE_TYPE && !foundTitle) {
+			if (entry.customType === UI_META_STATE_TYPE) {
 				const data = entry.data as Partial<UiMetaStateData>;
 				if (data.v !== 1) continue;
 				currentTitle = typeof data.title === "string"
 					? sanitizeUiMetaText(data.title, limits.title) : "";
-				foundTitle = true;
+				break;
 			}
-			if (entry.customType === TURN_RECAP_TYPE && lastRecap === undefined) {
-				const data = entry.data as Partial<TurnRecapData>;
-				if (data.v === 1 && typeof data.text === "string") {
-					lastRecap = sanitizeUiMetaText(data.text, limits.recap) || undefined;
-				}
-			}
-			if (foundTitle && lastRecap !== undefined) break;
 		}
 		stateDirty = false;
 		titleController.setTaskTitle(config.title.enabled ? currentTitle : "");
 	};
 
 	const flushPendingEntries = () => {
-		if (pendingRecap) pi.appendEntry<TurnRecapData>(TURN_RECAP_TYPE, pendingRecap);
-		pendingRecap = undefined;
-		if (recapIssue && !recapReceived) pi.appendEntry<RecapIssueData>(RECAP_MISS_TYPE, recapIssue);
-		recapIssue = undefined;
 		if (!stateDirty) return;
 		pi.appendEntry<UiMetaStateData>(UI_META_STATE_TYPE, {
 			v: 1,
@@ -203,20 +151,13 @@ export function registerUiMeta(
 		}
 	};
 
-	pi.registerEntryRenderer<TurnRecapData>(
-		TURN_RECAP_TYPE,
-		(entry, _options, theme) => new Text(
-			theme.fg("dim", `${I_RECAP} Recap · ${entry.data?.text ?? ""}`), 0, 0,
-		),
-	);
-
 	pi.registerMarkdownTransformer((markdown, context) => {
 		if (context.messageType !== "assistant") return markdown;
 		return stripUiMetaBlocks(markdown, context.isStreaming);
 	});
 
 	pi.on("session_start", (_event, ctx) => {
-		enabledForSession = ctx.mode === "tui" && config.enabled && (startMetadataEnabled || config.recap.enabled);
+		enabledForSession = ctx.mode === "tui" && config.enabled && startMetadataEnabled;
 		resetRun();
 		if (enabledForSession) restoreState(ctx);
 	});
@@ -245,26 +186,6 @@ export function registerUiMeta(
 		if (requestActive && (message.stopReason === "stop" || message.stopReason === "toolUse")) {
 			const records = extractUiMetaRecords(text, limits);
 			applyStart(records);
-			if (config.recap.enabled && !recapReceived) {
-				const recap = records.find((record) => record.kind === "turn_end");
-				const allowRecap = canCommitUiMetaRecap(message.stopReason,
-					message.content.some((entry) => entry.type === "toolCall"));
-				if (allowRecap) {
-					if (recap?.kind === "turn_end") {
-						recapReceived = true;
-						recapIssue = undefined;
-						if (recap.recap !== lastRecap) {
-							lastRecap = recap.recap;
-							pendingRecap = { v: 1, text: recap.recap, timestamp: Date.now() };
-						}
-					} else {
-						const issue = diagnoseUiMetaRecapIssue(text, limits) ?? (earlyRecapSeen ? { reason: "early" as const } : undefined);
-						recapIssue = issue ? { v: 1, ...issue, timestamp: Date.now() } : undefined;
-					}
-				} else if (recap) {
-					earlyRecapSeen = true;
-				}
-			}
 		}
 		const replacement = stripMessageMetadata(message);
 		return replacement ? { message: replacement } : undefined;
@@ -297,7 +218,6 @@ export function registerUiMeta(
 		resetRun();
 		stateDirty = false;
 		currentTitle = "";
-		lastRecap = undefined;
 		titleController.setWorking(false);
 		enabledForSession = false;
 	});

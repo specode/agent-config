@@ -5,7 +5,6 @@ const LEGACY_UI_META_BROKEN_CLOSE = "_meta>";
 
 export interface UiMetaLimits {
 	title: number;
-	recap: number;
 	sessionName: number;
 }
 
@@ -20,20 +19,7 @@ export interface UiMetaTurnStart {
 	session?: UiMetaSessionDirective;
 }
 
-export interface UiMetaTurnEnd {
-	v: 1;
-	kind: "turn_end";
-	recap: string;
-}
-
-export type UiMetaRecord = UiMetaTurnStart | UiMetaTurnEnd;
-
-export function canCommitUiMetaRecap(
-	stopReason: string,
-	hasToolCalls: boolean,
-): boolean {
-	return stopReason === "stop" && !hasToolCalls;
-}
+export type UiMetaRecord = UiMetaTurnStart;
 
 type JsonObject = Record<string, unknown>;
 
@@ -95,12 +81,6 @@ function parseRecord(
 		};
 	}
 
-	if (value.kind === "turn_end" && typeof value.recap === "string") {
-		const recap = sanitizeUiMetaText(value.recap, limits.recap);
-		if (!recap) return undefined;
-		return { v: 1, kind: "turn_end", recap };
-	}
-
 	return undefined;
 }
 
@@ -140,26 +120,6 @@ function parseProtocolLine(
 	return parseProtocolBody(protocolBody(line), limits);
 }
 
-/** Index of an end record appended to prose on the same line, or -1. */
-function inlineSentinelIndex(line: string): number {
-	const index = line.lastIndexOf(UI_META_SENTINEL);
-	return index > 0 && line.slice(0, index).trim() ? index : -1;
-}
-
-/** Models sometimes append turn_end to the last prose line instead of a new line. */
-function parseInlineTurnEnd(
-	line: string,
-	limits: UiMetaLimits,
-): UiMetaRecord | undefined {
-	const index = inlineSentinelIndex(line);
-	if (index < 0) return undefined;
-	const record = parseProtocolBody(
-		line.slice(index + UI_META_SENTINEL.length).trim(),
-		limits,
-	);
-	return record?.kind === "turn_end" ? record : undefined;
-}
-
 function boundaryLineIndexes(lines: string[]): number[] {
 	let first = 0;
 	while (first < lines.length && !lines[first]?.trim()) first++;
@@ -170,79 +130,14 @@ function boundaryLineIndexes(lines: string[]): number[] {
 	return first === last ? [first] : [first, last];
 }
 
-/**
- * Parse one-line protocol records only at their required message boundaries:
- * turn_start at the beginning and turn_end at the end. The legacy XML-shaped
- * format remains readable so in-flight and restored sessions stay compatible.
- */
+/** Parse optional title and naming metadata only at the beginning of a message. */
 export function extractUiMetaRecords(
 	text: string,
 	limits: UiMetaLimits,
 ): UiMetaRecord[] {
-	const lines = text.split(/\r?\n/);
-	const indexes = boundaryLineIndexes(lines);
-	const records: UiMetaRecord[] = [];
-	for (const [position, index] of indexes.entries()) {
-		const line = lines[index];
-		if (line === undefined) continue;
-		const isLast = index === indexes.at(-1);
-		const record =
-			parseProtocolLine(line, limits) ??
-			(isLast ? parseInlineTurnEnd(line, limits) : undefined);
-		if (!record) continue;
-		if (record.kind === "turn_start" && position === 0) records.push(record);
-		if (record.kind === "turn_end" && isLast) records.push(record);
-	}
-	return records;
-}
-
-export type UiMetaRecapIssue = { reason: "invalid" | "misplaced"; snippet: string };
-
-const RECAP_MISS_SNIPPET_LENGTH = 160;
-
-function protocolMarkerIndex(line: string): number {
-	const indexes = [UI_META_SENTINEL, LEGACY_UI_META_OPEN_TAG]
-		.map((marker) => line.indexOf(marker))
-		.filter((index) => index >= 0);
-	return indexes.length ? Math.min(...indexes) : -1;
-}
-
-function protocolSnippet(line: string, markerIndex: number): string {
-	return sanitizeUiMetaText(line.slice(markerIndex), RECAP_MISS_SNIPPET_LENGTH);
-}
-
-/**
- * Diagnose attempted but malformed recaps before stripping. Omission is normal;
- * diagnostics are never displayed or sent back to the model.
- */
-export function diagnoseUiMetaRecapIssue(
-	text: string,
-	limits: UiMetaLimits,
-): UiMetaRecapIssue | undefined {
-	if (extractUiMetaRecords(text, limits).some((record) => record.kind === "turn_end")) return undefined;
-	const lines = text.split(/\r?\n/);
-	const lastIndex = boundaryLineIndexes(lines).at(-1);
-	const last = lastIndex === undefined ? undefined : lines[lastIndex];
-	if (last !== undefined) {
-		const markerIndex = protocolMarkerIndex(last);
-		if (
-			markerIndex >= 0 &&
-			parseProtocolLine(last, limits)?.kind !== "turn_start"
-		) {
-			return { reason: "invalid", snippet: protocolSnippet(last, markerIndex) };
-		}
-	}
-	for (const [index, line] of lines.entries()) {
-		if (index === lastIndex) continue;
-		const markerIndex = protocolMarkerIndex(line);
-		if (markerIndex >= 0 && line.includes("turn_end", markerIndex)) {
-			return {
-				reason: "misplaced",
-				snippet: protocolSnippet(line, markerIndex),
-			};
-		}
-	}
-	return undefined;
+	const line = text.split(/\r?\n/).find((line) => line.trim());
+	const record = line === undefined ? undefined : parseProtocolLine(line, limits);
+	return record ? [record] : [];
 }
 
 function stripCompleteLegacyBoundaryBlocks(text: string): string {
@@ -301,37 +196,7 @@ function stripProtocolBoundaryLines(
 			break;
 		lines.splice(last, 1);
 	}
-	stripInlineTurnEnd(lines, hideIncomplete);
 	return lines.join("\n");
-}
-
-const MIN_INLINE_SENTINEL_PREFIX = 3;
-
-function stripInlineTurnEnd(lines: string[], hideIncomplete: boolean): void {
-	const last = boundaryLineIndexes(lines).at(-1);
-	const line = last === undefined ? undefined : lines[last];
-	if (last === undefined || line === undefined) return;
-
-	const index = inlineSentinelIndex(line);
-	if (index >= 0) {
-		const body = line.slice(index + UI_META_SENTINEL.length).trim();
-		// A complete record ends the line; an unfinished one has not closed yet.
-		if (body.endsWith("}") || (hideIncomplete && !body.includes("}"))) {
-			lines[last] = line.slice(0, index).trimEnd();
-		}
-		return;
-	}
-	if (!hideIncomplete) return;
-	for (
-		let length = Math.min(UI_META_SENTINEL.length - 1, line.length - 1);
-		length >= MIN_INLINE_SENTINEL_PREFIX;
-		length--
-	) {
-		if (line.endsWith(UI_META_SENTINEL.slice(0, length))) {
-			lines[last] = line.slice(0, -length).trimEnd();
-			return;
-		}
-	}
 }
 
 /**

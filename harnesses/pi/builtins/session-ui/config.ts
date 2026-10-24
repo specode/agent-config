@@ -38,10 +38,6 @@ export interface SessionUiConfig {
 			enabled: boolean;
 			maxLength: number;
 		};
-		recap: {
-			enabled: boolean;
-			maxLength: number;
-		};
 		sessionName: {
 			enabled: boolean;
 			maxLength: number;
@@ -98,10 +94,6 @@ export const DEFAULT_SESSION_UI_CONFIG: SessionUiConfig = {
 		title: {
 			enabled: true,
 			maxLength: 36,
-		},
-		recap: {
-			enabled: true,
-			maxLength: 120,
 		},
 		sessionName: {
 			enabled: true,
@@ -184,7 +176,6 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 	const turnDuration = objectValue(raw.turnDuration);
 	const uiMeta = objectValue(raw.uiMeta);
 	const uiMetaTitle = objectValue(uiMeta.title);
-	const uiMetaRecap = objectValue(uiMeta.recap);
 	const uiMetaSessionName = objectValue(uiMeta.sessionName);
 
 	let placement = DEFAULT_SESSION_UI_CONFIG.toolActivity.placement;
@@ -327,22 +318,6 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 					"uiMeta.title.maxLength",
 					8,
 					80,
-					warnings,
-				),
-			},
-			recap: {
-				enabled: booleanValue(
-					uiMetaRecap.enabled,
-					DEFAULT_SESSION_UI_CONFIG.uiMeta.recap.enabled,
-					"uiMeta.recap.enabled",
-					warnings,
-				),
-				maxLength: boundedInteger(
-					uiMetaRecap.maxLength,
-					DEFAULT_SESSION_UI_CONFIG.uiMeta.recap.maxLength,
-					"uiMeta.recap.maxLength",
-					20,
-					240,
 					warnings,
 				),
 			},

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createRequire, registerHooks } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
@@ -13,31 +12,18 @@ if (root) {
 	({ ExtensionRunner } = await load("dist/core/extensions/runner.js"));
 	({ AgentSession } = await load("dist/core/agent-session.js"));
 	({ buildSystemPromptSections, diffSystemPromptSections } = await load("dist/core/system-prompt.js"));
-	const require = createRequire(resolve(root, "package.json"));
-	const tuiPath = require.resolve("@earendil-works/pi-tui");
-	const hooks = registerHooks({
-		resolve(specifier, context, nextResolve) {
-			return nextResolve(specifier === "@earendil-works/pi-tui" ? tuiPath : specifier, context);
-		},
-	});
-	try {
-		({ registerUiMeta } = await import("./ui-meta.ts"));
-	} finally {
-		hooks.deregister();
-	}
+	({ registerUiMeta } = await import("./ui-meta.ts"));
 }
 const options = { skip: !root };
 const meta = (record) => `${UI_META_SENTINEL}${JSON.stringify({ v: 1, ...record })}`;
 const start = (title = "Current action", name) => ({
 	kind: "turn_start", title, ...(name ? { session: { action: "set", name } } : {}),
 });
-const recap = (text) => ({ kind: "turn_end", recap: text });
 const userTrigger = (prompt = "Request") => ({ messageType: "user", prompt });
 const customMessage = () => ({ role: "custom", customType: "web-search-content-ready", content: "Content is ready", display: true, timestamp: 10 });
 
 function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name, mode = "tui" } = {}) {
 	const handlers = new Map();
-	const renderers = new Map();
 	const titles = [], working = [];
 	let markdown;
 	let branch = structuredClone(entries);
@@ -46,7 +32,6 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		mode,
 		isIdle: () => true,
 		sessionManager: { getBranch: () => branch },
-		ui: { setWidget: () => assert.fail("Recap must remain in the transcript") },
 	};
 	const emit = (event, data = {}) => handlers.get(event)?.(data, ctx);
 	const rename = (value) => { sessionName = value; emit("session_info_changed", { name: value }); };
@@ -55,7 +40,7 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		appendEntry: (customType, data) => branch.push({ type: "custom", customType, data: structuredClone(data) }),
 		getSessionName: () => sessionName,
 		setSessionName: rename,
-		registerEntryRenderer: (key, renderer) => renderers.set(key, renderer),
+		registerEntryRenderer: () => assert.fail("Title metadata must not register transcript renderers"),
 		registerMarkdownTransformer: (transform) => { markdown = transform; },
 	}, config, { setTaskTitle: (title) => titles.push(title), setWorking: (value) => working.push(value) });
 	const raw = (text, stopReason = "stop", toolCalls = false, event = "message_end") => emit(event, {
@@ -76,40 +61,30 @@ function harness({ entries = [], config = DEFAULT_SESSION_UI_CONFIG.uiMeta, name
 		},
 		end: () => { emit("agent_end"); emit("agent_settled"); },
 		entries: () => branch,
-		recaps: () => branch.filter((entry) => entry.customType === "session-ui:turn-recap").map((entry) => entry.data.text),
-		misses: () => branch.filter((entry) => entry.customType === "session-ui:recap-miss").map((entry) => entry.data.reason),
 		setBranch: (entries) => { branch = structuredClone(entries); emit("session_tree"); },
 		newSession: () => { emit("session_shutdown"); branch = []; sessionName = undefined; emit("session_start"); },
 		name: () => sessionName,
 		markdown: (text, isStreaming = true) => markdown(text, { messageType: "assistant", isStreaming }),
-		render: (text) => renderers.get("session-ui:turn-recap")({ data: { text } }, {}, {
-			fg: (_color, value) => value,
-		}).render(200).join("\n"),
 	};
 }
 
-test("uses an optional static protocol without task state or request markers", options, () => {
+test("uses a title-only static protocol without task state or request markers", options, () => {
 	const h = harness();
 	const prompt = h.begin().sections.session_ui_meta;
 	assert.match(prompt, /Metadata is optional/);
 	assert.match(prompt, /Omission means keep/);
-	assert.match(prompt, /Discussion or agreement is not implementation/);
-	assert.match(prompt, /standalone overall status/);
-	assert.match(prompt, /blocker, failure or important correction/);
-	assert.doesNotMatch(prompt, /ui_meta_request|needStart|needRecap|currentTaskName/);
+	assert.doesNotMatch(prompt, /recap|turn_end|ui_meta_request|needStart|currentTaskName/i);
 	assert.equal(h.handlers.has("context"), false);
 	assert.equal(h.handlers.has("context_with_system"), false);
 	h.raw("Understood");
 	h.end();
 	assert.deepEqual(h.entries(), []);
 	h.begin();
-	h.message([start("Review implementation", "Review goal"), recap("Design agreed; implementation pending")]);
-	assert.deepEqual(h.recaps(), []);
+	h.message([start("Review implementation", "Review goal")]);
+	assert.deepEqual(h.entries(), []);
 	h.end();
-	assert.deepEqual(h.recaps(), ["Design agreed; implementation pending"]);
-	assert.equal(h.render(h.recaps()[0]).trimEnd(), "↳ Recap · Design agreed; implementation pending");
-	assert.deepEqual(h.entries().find((entry) => entry.customType === "session-ui:ui-meta-state").data,
-		{ v: 1, title: "Review implementation" });
+	assert.deepEqual(h.entries().map((entry) => [entry.customType, entry.data]),
+		[["session-ui:ui-meta-state", { v: 1, title: "Review implementation" }]]);
 	assert.equal(h.begin().sections.session_ui_meta, prompt);
 });
 
@@ -122,7 +97,6 @@ test("names only unnamed sessions and preserves titles on ordinary replies", opt
 	h.raw("Understood");
 	h.end();
 	assert.deepEqual(h.titles, ["", "Investigate"]);
-	assert.deepEqual(h.recaps(), []);
 	h.begin();
 	h.message([start("Implement", "Another goal")]);
 	h.end();
@@ -157,16 +131,15 @@ test("accepts independent title or name proposals without requiring keep records
 	assert.deepEqual(other.titles, [""]);
 });
 
-test("deduplicates adjacent recaps while retaining corrections and distinct results", options, () => {
+test("does not persist or diagnose unsupported end metadata", options, () => {
 	const h = harness();
-	for (const text of ["Feature A implemented; tests pending", "Feature A implemented; tests pending",
-		"Feature A verification failed", "Feature A verified", "Feature B blocked"]) {
-		h.begin();
-		h.message([recap(text)]);
-		h.end();
-	}
-	assert.deepEqual(h.recaps(), ["Feature A implemented; tests pending", "Feature A verification failed", "Feature A verified", "Feature B blocked"]);
-	assert.deepEqual(h.misses(), []);
+	h.begin();
+	const replacement = h.raw(`Answer\n${meta({ kind: "turn_end", recap: "Unused" })}`);
+	assert.deepEqual(replacement.message.content, [{ type: "text", text: "Answer" }]);
+	h.end();
+	assert.deepEqual(h.entries(), []);
+	h.begin(); h.raw(`Answer\n${UI_META_SENTINEL}{bad}`); h.end();
+	assert.deepEqual(h.entries(), []);
 });
 
 test("does not apply streaming, failed, late or repeated start metadata", options, () => {
@@ -174,19 +147,19 @@ test("does not apply streaming, failed, late or repeated start metadata", option
 	h.begin();
 	h.raw(meta(start("Speculative", "Bad name")), "stop", false, "message_update");
 	assert.deepEqual(h.titles, [""]);
-	for (const reason of ["aborted", "error", "length"]) h.message([start("Failed", "Bad name"), recap("Failed result")], reason);
+	for (const reason of ["aborted", "error", "length"]) h.message([start("Failed", "Bad name")], reason);
 	assert.equal(h.name(), undefined);
-	h.message([start("Inspect", "Actual goal"), recap("Too early")], "toolUse", true);
+	h.message([start("Inspect", "Actual goal")], "toolUse", true);
 	h.message([start("Tool continuation", "Override")], "toolUse", true);
-	h.message([recap("Actual result")]);
+	h.raw("Actual result");
 	h.end();
 	assert.deepEqual(h.titles, ["", "Inspect"]);
-	assert.deepEqual(h.recaps(), ["Actual result"]);
-	assert.deepEqual(h.misses(), []);
-	const stripped = h.message([start("Stale"), recap("Stale")]);
+	const entries = structuredClone(h.entries());
+	const stripped = h.raw(`${meta(start("Stale"))}\nAnswer`);
 	h.end();
 	assert.deepEqual(stripped.message.content, [{ type: "text", text: "Answer" }]);
 	assert.deepEqual(h.titles, ["", "Inspect"]);
+	assert.deepEqual(h.entries(), entries);
 	h.begin();
 	h.raw("A reply with no metadata", "toolUse", true);
 	h.message([start("Too late")]);
@@ -194,7 +167,7 @@ test("does not apply streaming, failed, late or repeated start metadata", option
 	assert.equal(h.titles.at(-1), "Inspect");
 });
 
-test("preserves consumed title eligibility and final recap through compaction retry", options, () => {
+test("preserves consumed title eligibility through compaction retry", options, () => {
 	for (const runType of ["user", "custom"]) {
 		const h = harness();
 		h.begin(runType);
@@ -202,29 +175,28 @@ test("preserves consumed title eligibility and final recap through compaction re
 		h.emit("session_compact", { willRetry: true });
 		h.emit("agent_end");
 		h.begin("user");
-		h.message([start("Repeated"), recap("Verified after compaction")]);
+		h.message([start("Repeated")]);
 		h.end();
 		assert.deepEqual(h.titles, runType === "user" ? ["", "Inspect"] : [""]);
-		assert.deepEqual(h.recaps(), ["Verified after compaction"]);
 	}
 	const h = harness();
 	h.begin();
 	h.raw("Truncated", "length");
 	h.emit("session_compact", { willRetry: true });
 	h.begin();
-	h.message([start("Recovered"), recap("Recovered result")]);
+	h.message([start("Recovered")]);
 	h.end();
 	assert.equal(h.titles.at(-1), "Recovered");
 });
 
-test("allows custom-run recaps but never custom-run title or name changes", options, () => {
+test("never changes titles or names during custom runs", options, () => {
 	const h = harness();
 	const prompt = h.begin("custom").sections.session_ui_meta;
-	h.message([start("Background title", "Background name"), recap("Background fetch failed; source unavailable")]);
+	h.message([start("Background title", "Background name")]);
 	h.end();
 	assert.deepEqual(h.titles, [""]);
 	assert.equal(h.name(), undefined);
-	assert.deepEqual(h.recaps(), ["Background fetch failed; source unavailable"]);
+	assert.deepEqual(h.entries(), []);
 	assert.equal(h.begin().sections.session_ui_meta, prompt);
 	h.message([start("Research", "Research sources")]);
 	h.end();
@@ -232,50 +204,34 @@ test("allows custom-run recaps but never custom-run title or name changes", opti
 	assert.deepEqual(h.working, [true, false, true, false]);
 });
 
-test("restores branch-local title and recap deduplication without flushing abandoned state", options, () => {
+test("restores branch-local titles without flushing abandoned state", options, () => {
 	const h = harness({ name: "Pinned" });
-	h.begin(); h.message([start("Task A"), recap("A verified")]); h.end();
+	h.begin(); h.message([start("Task A")]); h.end();
 	const branchA = structuredClone(h.entries());
-	h.begin(); h.message([start("Task B"), recap("B blocked")]); h.end();
+	h.begin(); h.message([start("Task B")]); h.end();
 	const restored = harness({ entries: h.entries(), name: h.name() });
 	assert.equal(restored.titles.at(-1), "Task B");
-	restored.begin(); restored.message([recap("B blocked")]); restored.end();
-	assert.equal(restored.recaps().length, 2);
-	restored.begin(); restored.message([start("Uncommitted"), recap("Must not leak")]);
+	const count = restored.entries().length;
+	restored.begin(); restored.message([start("Task B")]); restored.end();
+	assert.equal(restored.entries().length, count);
+	restored.begin(); restored.message([start("Uncommitted")]);
 	restored.setBranch(branchA);
 	restored.end();
 	assert.deepEqual(restored.entries(), branchA);
 	assert.equal(restored.titles.at(-1), "Task A");
-	restored.begin(); restored.message([recap("B blocked")]); restored.end();
-	assert.deepEqual(restored.recaps(), ["A verified", "B blocked"]);
+	restored.begin(); restored.message([start("Task B")]); restored.end();
+	assert.equal(restored.entries().at(-1).data.title, "Task B");
 	restored.newSession();
 	assert.equal(restored.titles.at(-1), "");
-	restored.begin(); restored.message([recap("B blocked")]); restored.end();
-	assert.deepEqual(restored.recaps(), ["B blocked"]);
-});
-
-test("records only malformed or early attempts, never an omitted recap", options, () => {
-	const h = harness();
-	h.begin(); h.raw("Understood"); h.end();
-	assert.deepEqual(h.misses(), []);
-	h.begin();
-	const replacement = h.raw(`Answer\n${UI_META_SENTINEL}{"v":1,"kind":"turn_end"}`);
-	assert.deepEqual(replacement.message.content, [{ type: "text", text: "Answer" }]);
-	h.end();
-	assert.deepEqual(h.misses(), ["invalid"]);
-	h.begin(); h.raw(`Answer\n${meta(recap("Misplaced"))}\nTrailing text`); h.end();
-	h.begin(); h.message([recap("Too early")], "toolUse", true); h.raw("Final answer"); h.end();
-	assert.deepEqual(h.misses(), ["invalid", "misplaced", "early"]);
-	h.begin(); h.message([recap("Failed")], "aborted"); h.end();
-	h.begin(); h.raw(`Final answer.${meta(recap("Valid inline result"))}`); h.end();
-	assert.deepEqual(h.misses(), ["invalid", "misplaced", "early"]);
-	assert.deepEqual(h.recaps(), ["Valid inline result"]);
+	restored.begin(); restored.message([start("Task B")]); restored.end();
+	assert.equal(restored.entries().length, 1);
+	assert.equal(restored.entries()[0].data.title, "Task B");
 });
 
 test("cleans boundary metadata while preserving normal text and tool content", options, () => {
 	const h = harness();
 	assert.equal(h.markdown(`Answer\n${UI_META_SENTINEL.slice(0, 8)}`), "Answer");
-	assert.equal(h.markdown(`${meta(start())}\nAnswer\n${meta(recap("Done"))}`), "Answer");
+	assert.equal(h.markdown(`${meta(start())}\nAnswer`), "Answer");
 	assert.equal(h.markdown('<ui_meta>{"v":1}</ui_meta>\nAnswer'), "Answer");
 	h.begin();
 	const result = h.raw(`${meta(start())}\nAnswer`, "toolUse", true);
@@ -285,23 +241,26 @@ test("cleans boundary metadata while preserving normal text and tool content", o
 
 test("honors feature flags and leaves non-TUI sessions untouched", options, () => {
 	const config = structuredClone(DEFAULT_SESSION_UI_CONFIG.uiMeta);
-	config.title.enabled = false;
-	config.sessionName.enabled = false;
-	const h = harness({ config });
-	h.begin(); h.message([start("Ignored", "Ignored"), recap("Latest progress")]); h.end();
-	assert.equal(h.name(), undefined);
-	assert.deepEqual(h.titles, [""]);
-	assert.deepEqual(h.recaps(), ["Latest progress"]);
-	const noRecap = harness({ config: { ...config, title: { ...config.title, enabled: true }, recap: { ...config.recap, enabled: false } } });
-	noRecap.begin(); noRecap.raw(`Answer\n${UI_META_SENTINEL}{bad}`); noRecap.end();
-	assert.deepEqual(noRecap.entries(), []);
-	for (const other of [harness({ config: { ...config, enabled: false } }),
-		harness({ config: { ...config, recap: { ...config.recap, enabled: false } } }),
-		...["rpc", "print", "json"].map((mode) => harness({ mode }))]) {
+	const titleOnly = harness({ config: { ...config, sessionName: { ...config.sessionName, enabled: false } } });
+	titleOnly.begin(); titleOnly.message([start("Inspect", "Ignored")]); titleOnly.end();
+	assert.equal(titleOnly.name(), undefined);
+	assert.equal(titleOnly.titles.at(-1), "Inspect");
+	const nameOnly = harness({ config: { ...config, title: { ...config.title, enabled: false } } });
+	nameOnly.begin(); nameOnly.message([start("Ignored", "Goal")]); nameOnly.end();
+	assert.equal(nameOnly.name(), "Goal");
+	assert.deepEqual(nameOnly.titles, [""]);
+	assert.deepEqual(nameOnly.entries(), []);
+	for (const other of [
+		harness({ config: { ...config, enabled: false } }),
+		harness({ config: { ...config, title: { ...config.title, enabled: false }, sessionName: { ...config.sessionName, enabled: false } } }),
+		...["rpc", "print", "json"].map((mode) => harness({ mode })),
+	]) {
 		assert.deepEqual(other.begin(), { sections: {} });
-		assert.equal(other.message([start("Ignored"), recap("Ignored")]), undefined);
+		assert.equal(other.message([start("Ignored", "Ignored")]), undefined);
 		other.end();
 		assert.deepEqual(other.entries(), []);
+		assert.deepEqual(other.titles, []);
+		assert.equal(other.name(), undefined);
 	}
 });
 
@@ -363,7 +322,7 @@ test("keeps the entire prior input prefix across normal turns, tools and idle cu
 	h.message([start("Inspect", "Goal")], "toolUse", true);
 	history = [...history, { role: "toolResult", toolCallId: "call-2", toolName: "read", content: [{ type: "text", text: "More data" }], isError: false, timestamp: 6 }];
 	assert.deepEqual((await requestTransform(runner, first.systemPromptOptions)(history)).slice(0, firstInput.length), firstInput);
-	h.message([recap("Verified")]); h.end();
+	h.raw("Verified"); h.end();
 	const beforeNextTurn = structuredClone(history);
 	history.push({ role: "user", content: "Understood", timestamp: 7 });
 	const second = await runner.emitBeforeAgentStart(userTrigger("Understood"), base);
@@ -395,9 +354,8 @@ test("busy custom notifications queue without reopening title eligibility", opti
 		_startRun: () => assert.fail("Busy custom messages must queue"),
 	}, customMessage(), { triggerTurn: true });
 	assert.equal(queued.role, "custom");
-	h.message([start("Background"), recap("Background result confirmed")]); h.end();
+	h.message([start("Background")]); h.end();
 	assert.deepEqual(h.titles, ["", "Inspect"]);
-	assert.deepEqual(h.recaps(), ["Background result confirmed"]);
 });
 
 test("preserves Pi prompt and tool restoration when another extension rewrites observations", options, async () => {
@@ -439,7 +397,7 @@ test("persists one static section and recreates it after compaction without edit
 	assert.deepEqual(preparePrompt(systemPromptOptions, retained).sections, patch.sections);
 });
 
-test("removes the protocol outside TUI and restores it on return without injecting recaps", options, async () => {
+test("removes the protocol outside TUI and restores it on return", options, async () => {
 	const base = { cwd: process.cwd(), customPrompt: "Base", selectedTools: [] };
 	const tui = nativeRunner(harness());
 	const { systemPromptOptions: tuiOptions } = await tui.emitBeforeAgentStart(userTrigger(), base);

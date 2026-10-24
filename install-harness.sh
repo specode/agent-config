@@ -73,6 +73,7 @@ pi)
 			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|插件|Fast' \
 			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
 			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
+			'harnesses/pi/plugin-configs/interactive-shell/config.json|.pi/agent/interactive-shell.json|file|-|配置|Interactive Shell' \
 			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search'
 	}
 	;;
