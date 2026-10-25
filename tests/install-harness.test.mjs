@@ -190,6 +190,9 @@ test("replaces managed plugin directories only after consent and backs up obsole
 	writeFileSync(join(f.agentDir, "auth.json"), "test credential sentinel\n");
 	mkdirSync(join(f.agentDir, "sessions"));
 	writeFileSync(join(f.agentDir, "sessions/keep.jsonl"), "session sentinel\n");
+	mkdirSync(join(f.agentDir, "state"));
+	const animationState = '{"workAnimation":{"enabled":false}}\n';
+	writeFileSync(join(f.agentDir, "state/session-ui.json"), animationState);
 
 	assertSuccess(install(f, { input: "n\n" }));
 	for (const [path, text] of Object.entries(oldFiles)) assert.equal(readFileSync(join(f.agentDir, path), "utf8"), text);
@@ -210,6 +213,7 @@ test("replaces managed plugin directories only after consent and backs up obsole
 	assert.equal(readFileSync(join(f.agentDir, "extensions/unrelated.ts"), "utf8"), "unrelated plugin\n");
 	assert.equal(readFileSync(join(f.agentDir, "auth.json"), "utf8"), "test credential sentinel\n");
 	assert.equal(readFileSync(join(f.agentDir, "sessions/keep.jsonl"), "utf8"), "session sentinel\n");
+	assert.equal(readFileSync(join(f.agentDir, "state/session-ui.json"), "utf8"), animationState);
 	assertSuccess(install(f));
 	assert.deepEqual(readdirSync(backupRoot), backups);
 });

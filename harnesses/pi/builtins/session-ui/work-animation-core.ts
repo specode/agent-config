@@ -1,25 +1,3 @@
-type JsonObject = Record<string, unknown>;
-
-function isObject(value: unknown): value is JsonObject {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function withWorkAnimationEnabled(
-	raw: unknown,
-	enabled: boolean,
-): JsonObject {
-	if (!isObject(raw))
-		throw new Error("session-ui config root must be an object");
-	const current = isObject(raw.workAnimation) ? raw.workAnimation : {};
-	return {
-		...raw,
-		workAnimation: {
-			...current,
-			enabled,
-		},
-	};
-}
-
 export function phaseForTool(toolName: string): string {
 	const name = toolName.toLowerCase();
 	if (name === "read" || name.includes("fetch")) return "Reading...";

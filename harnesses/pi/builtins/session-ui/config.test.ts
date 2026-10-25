@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { loadSessionUiConfig } from "./config.ts";
+import { DEFAULT_SESSION_UI_CONFIG, loadSessionUiConfig } from "./config.ts";
 
 const TEST_ROOT = `/tmp/mozi-test/session-ui-config-${process.pid}-${Date.now()}`;
 
@@ -13,8 +13,13 @@ function withConfig(raw: unknown) {
 		`config-${Math.random().toString(16).slice(2)}.json`,
 	);
 	writeFileSync(path, `${JSON.stringify(raw)}\n`, "utf8");
+	return withConfigPath(path);
+}
+
+function withConfigPath(path?: string) {
 	const previous = process.env.PI_SESSION_UI_CONFIG;
-	process.env.PI_SESSION_UI_CONFIG = path;
+	if (path === undefined) delete process.env.PI_SESSION_UI_CONFIG;
+	else process.env.PI_SESSION_UI_CONFIG = path;
 	try {
 		return loadSessionUiConfig();
 	} finally {
@@ -25,6 +30,56 @@ function withConfig(raw: unknown) {
 
 test.after(() => {
 	rmSync(TEST_ROOT, { recursive: true, force: true });
+});
+
+test("distinguishes an absent default config from an explicit missing path", () => {
+	assert.deepEqual(withConfigPath().warnings, []);
+	assert.deepEqual(withConfigPath("  ").warnings, []);
+	const missing = join(TEST_ROOT, "missing.json");
+	const result = withConfigPath(missing);
+	assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
+	assert.equal(result.path, missing);
+	assert.equal(result.warnings.length, 1);
+	assert.ok(result.warnings[0]!.includes(missing));
+	assert.match(result.warnings[0]!, /failed to load/);
+});
+
+test("reports malformed JSON and unreadable config paths", () => {
+	mkdirSync(TEST_ROOT, { recursive: true });
+	const malformed = join(TEST_ROOT, "malformed.json");
+	writeFileSync(malformed, "{");
+	for (const path of [malformed, TEST_ROOT]) {
+		const result = withConfigPath(path);
+		assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
+		assert.equal(result.warnings.length, 1);
+		assert.ok(result.warnings[0]!.includes(path));
+	}
+});
+
+test("warns on invalid roots and every explicitly invalid config section", () => {
+	for (const raw of [null, [], false, "invalid", 3]) {
+		assert.deepEqual(withConfig(raw).warnings, ["config root must be an object"]);
+		for (const key of ["toolActivity", "workAnimation", "compactPaste", "statusline", "effort", "turnDuration", "uiMeta"]) {
+			const result = withConfig({ [key]: raw });
+			assert.deepEqual(result.warnings, [`${key} must be an object`]);
+			assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
+		}
+		for (const [parent, key] of [
+			["statusline", "extensionStatuses"], ["uiMeta", "title"], ["uiMeta", "sessionName"],
+		]) {
+			const result = withConfig({ [parent!]: { [key!]: raw } });
+			assert.deepEqual(result.warnings, [`${parent}.${key} must be an object`]);
+			assert.deepEqual(result.config, DEFAULT_SESSION_UI_CONFIG);
+		}
+	}
+});
+
+test("keeps valid sibling settings when a config section falls back", () => {
+	const result = withConfig({ workAnimation: false, statusline: { enabled: false } });
+	assert.deepEqual(result.warnings, ["workAnimation must be an object"]);
+	assert.equal(result.config.workAnimation.enabled, true);
+	assert.equal(result.config.statusline.enabled, false);
+	assert.deepEqual(withConfig({}).warnings, []);
 });
 
 test("loads tool activity defaults and overrides", () => {

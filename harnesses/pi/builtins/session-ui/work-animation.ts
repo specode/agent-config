@@ -1,11 +1,3 @@
-import {
-	chmodSync,
-	readFileSync,
-	realpathSync,
-	renameSync,
-	statSync,
-	writeFileSync,
-} from "node:fs";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -13,10 +5,11 @@ import type {
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { SessionUiConfig } from "./config.ts";
 import type { SessionTitleController } from "./title-controller.ts";
+import { phaseForTool } from "./work-animation-core.ts";
 import {
-	phaseForTool,
-	withWorkAnimationEnabled,
-} from "./work-animation-core.ts";
+	loadWorkAnimationState,
+	saveWorkAnimationState,
+} from "./work-animation-state.ts";
 
 type WorkAnimationConfig = SessionUiConfig["workAnimation"];
 
@@ -28,33 +21,14 @@ const WIDGET_ID = "session-ui:work-animation";
 const TITLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const MASCOT_FRAMES = ["ᕕ( ᐛ )ᕗ", "ᕗ( ᐛ )ᕕ"];
 
-function saveEnabled(configPath: string, enabled: boolean): void {
-	let raw: unknown;
-	try {
-		raw = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
-	} catch (error) {
-		throw new Error(
-			`Could not read session-ui config: ${error instanceof Error ? error.message : String(error)}`,
-		);
-	}
-	const next = withWorkAnimationEnabled(raw, enabled);
-	const targetPath = realpathSync(configPath);
-	const temporaryPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
-	writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, {
-		encoding: "utf8",
-		flag: "wx",
-	});
-	chmodSync(temporaryPath, statSync(targetPath).mode);
-	renameSync(temporaryPath, targetPath);
-}
-
 export function registerWorkAnimation(
 	pi: ExtensionAPI,
 	initialConfig: WorkAnimationConfig,
-	configPath: string,
+	statePath: string,
 	titleController: SessionTitleController,
 ): void {
 	let config = { ...initialConfig };
+	let lastStateWarning: string | undefined;
 	let requestRender: (() => void) | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let running = false;
@@ -122,6 +96,14 @@ export function registerWorkAnimation(
 		frameIndex = 0;
 		phase = "Working...";
 		activeTools.clear();
+		const saved = loadWorkAnimationState(statePath, initialConfig.enabled);
+		config.enabled = saved.enabled;
+		if (ctx.hasUI) {
+			if (saved.warning && saved.warning !== lastStateWarning) {
+				ctx.ui.notify(saved.warning, "warning");
+			}
+			lastStateWarning = saved.warning;
+		}
 
 		if (!isTui(ctx)) return;
 		ctx.ui.setWidget(
@@ -206,10 +188,10 @@ export function registerWorkAnimation(
 				startAnimation(ctx);
 			}
 			try {
-				saveEnabled(configPath, config.enabled);
+				saveWorkAnimationState(statePath, config.enabled);
 			} catch (error) {
 				ctx.ui.notify(
-					`Animation changed but could not save: ${error instanceof Error ? error.message : String(error)}`,
+					`Work animation ${config.enabled ? "on" : "off"} for this session only; could not save ${statePath}: ${error instanceof Error ? error.message : String(error)}`,
 					"warning",
 				);
 				return;

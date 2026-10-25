@@ -1,171 +1,143 @@
 # Agent Config
 
-个人 AI 编程工具配置，统一协作规则，并为 Pi、Claude Code 补齐代码导航、任务协作和界面能力。
+个人 AI 编程工具配置，统一协作习惯，并为 Pi、Claude Code 补齐搜索、界面和模型使用体验。
 
-- **通用规则**：约定 Agent 如何理解需求、修改代码和验证结果。
-- **Pi**：补充结构化提问、搜索、浏览器操作和会话界面。
-- **Claude Code**：补充语言服务、快捷键和状态栏。
+- **通用规则**：简体中文、澄清关键歧义、模块化设计、充分排查与验证。
+- **Pi**：代码与网页搜索、结构化提问、浏览器与桌面操作、图片生成和会话界面。
+- **Claude Code**：Go／Swift 语言服务、快捷键和状态栏。
 
-本仓库只安装配置与扩展，不安装工具本体，不提供账号或凭据。
+仓库只管理配置与本地扩展，不安装工具本体，不包含账号、凭据或会话记录。Pi 配置按当前稳定版 **1.4.0** 使用。
 
 ## 快速开始
 
-先安装并登录所需工具，再执行：
+先安装并登录所需工具，再在仓库根目录执行：
 
 ```bash
-./install-rules.sh                 # 共用规则
-./install-harness.sh pi            # 按需安装
-./install-harness.sh claude-code   # 按需安装
+./install-rules.sh
+./install-harness.sh pi
+./install-harness.sh claude-code
 ```
 
-依赖：Pi 配置安装需要 `rsync`；Claude Code 状态栏需要 `jq`。
+按需选择 harness；Pi 配置安装需要 `rsync`，Claude Code 状态栏需要 `jq`。终端建议使用 Nerd Font，以完整显示状态栏图标。
 
-有冲突时，安装器会询问是否备份并覆盖。安装器只部署当前托管配置，不清理旧插件、卸载外部包或迁移历史配置；旧入口可能仍被工具加载，请按需手动处理。安装后重新启动工具。
+配置按文件或插件目录整体安装，不逐项合并。有冲突时会询问是否备份并覆盖。安装后重新启动工具。
 
-**安装前注意：**
-
-- 配置不会与现有设置逐项合并。
-- Pi 的 Fast 默认关闭，支持 OpenAI／Codex 订阅与 Grok 4.7；开启可能增加额度消耗。
-- Claude Code 默认使用 `auto` 权限模式。
+个人默认值：
+- Pi 使用全屏 TUI、跟随终端配色的 `system` 主题，隐藏 thinking 正文，外部编辑器为 `nvim`。
+- Fast 默认关闭；开启可能增加订阅额度消耗。
+- Claude Code 使用 `auto` 权限模式、`high` 思考档位和自动上下文压缩。
 
 ## 使用说明
 
-### 通用规则
+### 通用规则与 Skills
 
-让不同工具遵循同一套协作习惯：简体中文、澄清关键歧义、模块化设计、排查到足以回答为止、修改后验证。
+修改 [全局规则](rules/AGENTS.md) 后运行 `./install-rules.sh`，同时更新 Agent、Claude Code、Codex、Pi 和 Grok 的用户级规则，不修改项目规则。
 
-修改 [`rules/AGENTS.md`](rules/AGENTS.md) 后，运行 `./install-rules.sh`。规则会同时安装到 Agent、Claude Code、Codex、Pi 和 Grok 的用户目录，不修改项目级规则。
-
-**通用 Skills**
-
-Claude Code 与 Pi 的通用技能使用 `npx skills` 统一管理：源文件保存在 `~/.agents/skills/`，两个 harness 的个人 skills 目录链接到同一份内容。当前共用 Remotion、UI/UX Pro Max、TypeSafe AI 和八个 GSAP 技能；插件自带技能和 Claude 的账号同步技能仍由各自来源管理。仓库安装器不安装或更新这些技能。
+Claude Code 与 Pi 的共用 Skills 使用 `npx skills` 管理，源文件位于 `~/.agents/skills/`。当前共用 Remotion、UI/UX Pro Max、TypeSafe AI 和八个 GSAP 技能。
 
 ```bash
-npx skills list -g -a claude-code pi              # 查看共用技能及关联
-npx skills add <来源> -g -a claude-code pi -y      # 同时安装到两个 harness
-npx skills update -g                             # 按记录的来源更新全局技能
+npx skills list -g -a claude-code pi
+npx skills add <来源> -g -a claude-code pi -y
+npx skills update -g
 ```
 
-Pi 修改后执行 `/reload`；Claude Code 重启后核对 `/skills`。统一技能清单不意味着插件专属工具也能跨 harness 使用。
+仓库安装器不安装或更新 Skills。修改后，Pi 执行 `/reload`；Claude Code 重启后通过 `/skills` 查看。插件自带技能由插件管理。
 
 ### Pi
 
-#### 解决什么问题
+#### 搜索与任务操作
 
-- **任务协作**：让 Agent 在关键决策处通过结构化选项提问。
-- **信息获取**：搜索代码与网页，操作真实浏览器或桌面。
-- **会话体验**：看清执行状态、模型档位和用量，减少重复设置。
+直接用自然语言提出需求，Agent 会按需调用工具。
 
-#### 使用哪些插件
+| 插件 | 用途 |
+| --- | --- |
+| `rpiv-ask-user-question` | 在关键决策处提供结构化选项 |
+| `pi-fff` | 按文件名和内容搜索；默认接管 `find`、`grep`，不扫描整个 HOME |
+| `pi-web-access` | 网页搜索与内容读取 |
+| `pi-kimi-cu` | 操作 macOS 应用 |
+| `pi-kimi-webbridge-bootstrap` | 操作已登录的真实浏览器；需安装并连接浏览器扩展 |
+| `pi-subscription-image` | 使用 Codex／Grok 订阅生成图片；参考图编辑使用 Codex |
 
-**任务协作与信息获取**
+Antigravity 也提供 Google 搜索与图片生成；需要这条通道时直接指定。涉及账号、浏览器或系统权限的功能，需自行完成授权。
 
-这些能力可直接用自然语言提出需求，由 Agent 调用相应工具。
+搜索配置：
+- [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) → `~/.pi/agent/pi-fff.json`
+- [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) → `~/.pi/agent/web-search.json`
 
-| 插件 | 用途 | 使用示例／入口 |
-| --- | --- | --- |
-| `rpiv-ask-user-question` | 结构化提问 | 需要选择方案时，在选项界面作答 |
-| `pi-fff` | 文件与内容搜索 | “找到登录相关文件” |
-| `pi-web-access` | 网页搜索与读取 | “查一下官方文档中的用法” |
-| `pi-kimi-cu` | macOS 桌面操作 | 指定应用和需要执行的操作 |
-| `pi-kimi-webbridge-bootstrap` | 真实浏览器操作 | 指定网页和任务；需配置浏览器扩展 |
-| `pi-subscription-image` | 图片生成与编辑 | 描述要生成或修改的图片 |
+#### 会话界面
 
-**会话体验与模型接入**
+[session-ui](harnesses/pi/builtins/session-ui/README.md) 显示工具活动、工作动画、图片预览、用量和本轮耗时，并按需生成动作标题与会话名称。
 
-| 插件 | 用途 | 怎么用 |
-| --- | --- | --- |
-| [session-ui](harnesses/pi/builtins/session-ui/README.md) | 工具活动、图片预览、状态栏与自动标题 | 自动生效；`/effort` 选思考档位，`/statusline` 切换状态栏 |
-| [Fast](harnesses/pi/builtins/fast/README.md) | OpenAI／Codex 订阅尝试 priority；Grok 4.7 走 Build 代理 fast 通道 | `/fast` 切换开关，只回一行 `Fast: on` / `Fast: off` |
-| `pi-last-model-effort` | 记住模型与思考档位 | 自动生效 |
-| `pi-subscription-usage` | 查看订阅额度 | 在 session-ui 状态栏查看 |
-| `pi-antigravity` | 接入 Antigravity 模型 | 完成 provider 登录后选择模型 |
+| 操作 | 命令 |
+| --- | --- |
+| 选择思考档位 | `/effort` |
+| 查看思考档位 | `/effort status` |
+| 切换自定义／原生状态栏 | `/statusline` |
+| 开关工作动画 | `/work-animation on`、`/work-animation off` |
+| 查看动画设置 | `/work-animation status` |
+| 手动命名会话 | `/name` |
 
-session-ui 的标题按实质变化可选生成，不要求每轮输出；自动命名只补充未命名会话。它复用正常回答，不额外调用模型，也不向用户消息注入动态请求标记。
+动画开关会记住上次选择，保存在 `~/.pi/agent/state/session-ui.json`；`/statusline` 只临时切换。界面配置位于 `~/.pi/agent/extensions/session-ui/config.json`。
 
-涉及账号、浏览器或系统权限的插件，需自行完成授权和依赖配置。
+`pi-last-model-effort` 自动记住模型与思考档位；`pi-subscription-usage` 为状态栏提供订阅额度。自动标题不额外调用模型，自动命名不会覆盖已有名称。
 
-仓库默认不提供自动审批能力。
+#### 模型与 Fast
 
-#### 常用配置
+通过 `/login` 登录 provider，`/model` 选择模型。GPT 使用 `openai-codex`；Antigravity 模型由 `pi-antigravity` 提供，可用 `/antigravity.refresh` 刷新目录。
 
-界面默认使用跟随终端配色的 `system` 主题和全屏 TUI，终端切换明暗时自动适配，隐藏 thinking 正文；外部编辑器为 `nvim`。
+仓库模型轮换顺序为 GPT-6 Astra → GPT-6.1 Sol → Grok 4.7 → Antigravity 模型。具体范围见 [settings.json](harnesses/pi/config/settings.json)，列入清单不代表账号已获授权。
 
-**基础设置**
+[Fast](harnesses/pi/builtins/fast/README.md) 通过 `/fast` 切换，`/fast status` 查询，`/fast off` 关闭。开关按 provider 保存在 `~/.pi/agent/state/fast.json`；`fast` 标记表示本地已启用，不保证后端实际加速。
 
-- [模型与插件清单](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
+[models.json](harnesses/pi/config/models.json) 将两个 Codex GPT 模型的本地上下文预算设为 500K tokens，不改变输出上限，也不保证后端支持同等窗口。安装器整体替换该文件；如有自定义模型，请先整合。
+
+#### Codemode 与 MCP
+
+仓库默认开启 Pi 内置 Codemode，可批量调用工具、过滤或汇总结果，普通工具仍可直接使用。例如：“并行检查 Git 状态和最近提交，汇总结果。”
+
+MCP 服务器由 Pi 内置支持连接，配置放在 `~/.pi/agent/mcp.json` 或项目的 `.pi/mcp.json`，不由仓库安装器托管。
+
+- `/mcp`：查看连接、登录、重连和启停服务器。
+- `pi mcp list`：从终端检查连接。
+- `pi mcp login <server>`：完成 OAuth 登录。
+- 修改配置后执行 `/reload`。
+
+Codemode 不限制被调用工具的实际权限；不要并行修改同一文件。仓库不提供自动审批功能。
+
+#### 基础配置与快捷键
+
+- [基础设置](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [快捷键](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
 - [模型覆盖](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`
 
-模型覆盖仅将 `openai-codex` 的 `gpt-6-astra` 和 `gpt-6.1-sol` 上下文预算设为 500K tokens，不改其他模型和输出上限。这是 Pi 本地预算，不保证后端支持同等窗口；超出后端限制可能报错。安装器整文件托管 `models.json`，已有自定义模型配置须在确认覆盖前自行整合。
-
-Antigravity 的 Claude 默认选用 Opus 5.5 和 Sonnet 5.5；通过 `/antigravity.refresh` 刷新服务端模型目录，再用 `/model` 选择。
-
-模型轮换顺序为 GPT-6 Astra → GPT-6.1 Sol → Grok 4.7 → Antigravity 模型。
-
-模型列入清单不代表账号已获授权，仍需登录对应 provider。GPT 模型使用 `openai-codex` provider；通过 `/login openai-codex` 登录 ChatGPT 订阅。
-
-**Codemode（Pi 内置）**
-
-仓库默认通过 `defaultTools: ["+codemode"]` 开启 Codemode，保留其他默认工具；无需 MCP 服务。重启 Pi 后，直接用自然语言要求 Agent 用 Codemode 批量调用工具、过滤或合并结果，例如“用 Codemode 并行查询 Git 状态和最近提交，只读操作，汇总结果”。
-
-配置位于 `~/.pi/agent/settings.json`；移除 `defaultTools` 中的 `+codemode` 可取消这项显式启用，但 MCP 服务仍可能自动启用它。保持默认 `on` 模式，普通工具仍可直接调用。脚本沙箱不限制被调用工具的实际权限，优先用于只读任务，避免并行修改同一文件。
-
-**MCP 服务（Pi 内置）**
-
-使用 Pi 0.99.1 的内置 MCP 支持，无需 `pi-mcp-adapter`。服务器配置放在 `~/.pi/agent/mcp.json`（个人）或 `.pi/mcp.json`（项目），不由本仓库安装器托管。
-
-- `/mcp`：管理服务器、查看连接状态与登录。
-- `pi mcp list`：从终端检查连接；`pi mcp login <server>`：完成 OAuth 授权。
-- 修改配置后执行 `/reload` 或重新启动 Pi。
-- 内置 MCP 暂无公开连接状态接口，session-ui 暂不显示 MCP 区块；连接状态请查看 `/mcp`。
-
-**界面与 Fast**
-
-- session-ui：修改 `~/.pi/agent/extensions/session-ui/config.json`，详见[功能与配置说明](harnesses/pi/builtins/session-ui/README.md)。
-- 关闭 Fast：在 Pi 里对该 provider 执行 `/fast off`，选择保存在 `~/.pi/agent/state/fast.json`。`~/.pi/agent/extensions/fast.json` 的 `enabled` 只是还没设过开关时的默认值。
-- `fast` 标记只表示开关已启用并已装上，不代表后端已确认加速。
-
-**搜索**
-
-按需调整以下配置，无需为了日常使用逐项修改。
-
-| 配置 | 安装后位置 |
-| --- | --- |
-| [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) | `~/.pi/agent/web-search.json` |
-| [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) | `~/.pi/agent/pi-fff.json` |
+`Ctrl+L` 打开模型选择器；全屏模式下 `Alt+K`／`Alt+J` 翻整页，`Alt+,`／`Alt+.` 滚动到顶部／底部。手动修改配置后执行 `/reload`。
 
 ### Claude Code
 
-#### 解决什么问题
+#### 语言服务与状态栏
 
-让 Go、Swift 项目的代码导航更方便，并改善长对话中的滚动和状态查看。
+启用 `gopls-lsp` 和 `swift-lsp`，用于 Go、Swift 项目的代码导航与诊断，需准备对应语言服务。
 
-#### 使用哪些插件
+自定义状态栏展示模型、思考档位、目录、分支、上下文、订阅额度和缓存命中率；数据随 Claude Code 提供的字段显示。需安装 `jq`。
 
-| 插件／组件 | 用途 | 怎么用 |
-| --- | --- | --- |
-| Go LSP（`gopls-lsp`） | Go 代码导航与诊断 | 准备语言服务依赖后，让 Agent 查定义、引用或错误 |
-| Swift LSP（`swift-lsp`） | Swift 代码导航与诊断 | 准备语言服务依赖后，在 Swift 项目中使用 |
-| 自定义状态栏 | 查看当前会话状态 | 自动显示；需要 `jq` |
+默认使用全屏 TUI、自动明暗主题，关闭反馈草稿。通过 `/tui` 查看模式，`/tui default` 或 `/tui fullscreen` 切换。
 
-#### 常用操作与配置
+#### 快捷键与配置
 
 | 快捷键 | 操作 |
 | --- | --- |
-| `Ctrl+L` | 打开模型选择器（与 Pi 一致，默认的 `Alt+P` 已解绑） |
-| `Alt+K` / `Alt+J` | 向上／向下滚动整页（与 Pi 一致） |
-| `Alt+U` / `Alt+D` | 向上／向下滚动半页 |
-| `Alt+,` / `Alt+.` | 滚动到顶部／底部 |
-
-默认使用全屏 TUI、自动明暗主题、`high` 思考档位和自动上下文压缩，关闭反馈草稿（`feedbackDrafts: "off"`）。用 `/tui` 查看当前渲染模式，`/tui default` 可切回经典模式，`/tui fullscreen` 恢复全屏。
+| `Ctrl+L` | 打开模型选择器 |
+| `Alt+K`／`Alt+J` | 向上／向下翻整页 |
+| `Alt+U`／`Alt+D` | 向上／向下翻半页 |
+| `Alt+,`／`Alt+.` | 滚动到顶部／底部 |
 
 - [基础设置](harnesses/claude-code/settings.json) → `~/.claude/settings.json`
 - [快捷键](harnesses/claude-code/keybindings.json) → `~/.claude/keybindings.json`
-- 状态栏未显示：检查 `jq` 和 `~/.claude/statusline-command.sh`。
+- 状态栏脚本：`~/.claude/statusline-command.sh`
 
 ## 更新与恢复
 
-- **更新**：拉取仓库后，重新运行对应安装命令。直接修改安装目录的内容可能被覆盖。
-- **恢复**：从 `~/.agent-config-backups/` 的对应备份复制原文件，再重启工具。具体备份目录见安装输出。
-- **查看支持的工具**：`./install-harness.sh --list`。
+- **更新仓库配置**：拉取仓库后，重新运行对应安装命令。直接修改安装目录中的托管配置可能被覆盖。
+- **更新 Pi 与插件**：`pi update` 更新 Pi，`pi update --extensions` 更新外部插件；更新后重启。
+- **恢复配置**：从安装输出所示的 `~/.agent-config-backups/` 备份目录复制原文件，再重启工具。
+- **查看安装选项**：`./install-harness.sh --list`。

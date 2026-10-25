@@ -16,7 +16,8 @@
  *   /work-animation [on|off|status]
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { join } from "node:path";
+import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCompactPasteEditor } from "./compact-paste.ts";
 import { loadSessionUiConfig } from "./config.ts";
 import { registerEffort } from "./effort.ts";
@@ -39,7 +40,12 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	) {
 		registerUiMeta(pi, config.uiMeta, titleController);
 	}
-	registerWorkAnimation(pi, config.workAnimation, loaded.path, titleController);
+	registerWorkAnimation(
+		pi,
+		config.workAnimation,
+		join(getAgentDir(), "state", "session-ui.json"),
+		titleController,
+	);
 	if (config.compactPaste.enabled) registerCompactPasteEditor(pi);
 	if (config.toolActivity.enabled) {
 		registerToolActivity(pi, config.toolActivity);
@@ -48,10 +54,12 @@ export default function sessionUi(pi: ExtensionAPI): void {
 	if (config.effort.enabled) registerEffort(pi);
 
 	if (loaded.warnings.length > 0) {
+		let notified = false;
 		pi.on("session_start", (_event, ctx) => {
-			if (!ctx.hasUI) return;
+			if (!ctx.hasUI || notified) return;
+			notified = true;
 			ctx.ui.notify(
-				`session-ui config fallback (${loaded.path}): ${loaded.warnings.join("; ")}`,
+				`session-ui config (${loaded.path}): ${loaded.warnings.join("; ")}; using defaults for invalid or missing values`,
 				"warning",
 			);
 		});

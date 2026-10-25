@@ -140,8 +140,15 @@ function boundedInteger(
 	return fallback;
 }
 
-function objectValue(value: unknown): JsonObject {
-	return isObject(value) ? value : {};
+function objectValue(
+	value: unknown,
+	path: string,
+	warnings: string[],
+): JsonObject {
+	if (value === undefined) return {};
+	if (isObject(value)) return value;
+	warnings.push(`${path} must be an object`);
+	return {};
 }
 
 function stringArrayValue(
@@ -167,16 +174,20 @@ function parseConfig(raw: unknown, warnings: string[]): SessionUiConfig {
 		return structuredClone(DEFAULT_SESSION_UI_CONFIG);
 	}
 
-	const toolActivity = objectValue(raw.toolActivity);
-	const workAnimation = objectValue(raw.workAnimation);
-	const compactPaste = objectValue(raw.compactPaste);
-	const statusline = objectValue(raw.statusline);
-	const extensionStatuses = objectValue(statusline.extensionStatuses);
-	const effort = objectValue(raw.effort);
-	const turnDuration = objectValue(raw.turnDuration);
-	const uiMeta = objectValue(raw.uiMeta);
-	const uiMetaTitle = objectValue(uiMeta.title);
-	const uiMetaSessionName = objectValue(uiMeta.sessionName);
+	const toolActivity = objectValue(raw.toolActivity, "toolActivity", warnings);
+	const workAnimation = objectValue(raw.workAnimation, "workAnimation", warnings);
+	const compactPaste = objectValue(raw.compactPaste, "compactPaste", warnings);
+	const statusline = objectValue(raw.statusline, "statusline", warnings);
+	const extensionStatuses = objectValue(
+		statusline.extensionStatuses, "statusline.extensionStatuses", warnings,
+	);
+	const effort = objectValue(raw.effort, "effort", warnings);
+	const turnDuration = objectValue(raw.turnDuration, "turnDuration", warnings);
+	const uiMeta = objectValue(raw.uiMeta, "uiMeta", warnings);
+	const uiMetaTitle = objectValue(uiMeta.title, "uiMeta.title", warnings);
+	const uiMetaSessionName = objectValue(
+		uiMeta.sessionName, "uiMeta.sessionName", warnings,
+	);
 
 	let placement = DEFAULT_SESSION_UI_CONFIG.toolActivity.placement;
 	if (toolActivity.placement !== undefined) {
@@ -349,7 +360,8 @@ export interface LoadedSessionUiConfig {
 
 export function loadSessionUiConfig(): LoadedSessionUiConfig {
 	const defaultPath = fileURLToPath(new URL("./config.json", import.meta.url));
-	const path = process.env.PI_SESSION_UI_CONFIG?.trim() || defaultPath;
+	const overridePath = process.env.PI_SESSION_UI_CONFIG?.trim();
+	const path = overridePath || defaultPath;
 	const warnings: string[] = [];
 
 	try {
@@ -360,7 +372,7 @@ export function loadSessionUiConfig(): LoadedSessionUiConfig {
 			typeof error === "object" && error !== null && "code" in error
 				? String((error as { code?: unknown }).code)
 				: undefined;
-		if (code !== "ENOENT") {
+		if (code !== "ENOENT" || overridePath) {
 			warnings.push(
 				`failed to load ${path}: ${error instanceof Error ? error.message : String(error)}`,
 			);
