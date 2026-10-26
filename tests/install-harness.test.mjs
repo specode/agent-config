@@ -74,6 +74,18 @@ test("installs the remaining model order without Claude Bridge", (t) => {
 	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), false);
 });
 
+test("declares the upstream subagent Git package without a pinned ref", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
+	const sources = settings.packages.map((entry) => typeof entry === "string" ? entry : entry.source);
+	assert.deepEqual(sources.filter((source) => source.includes("pi-subagent")), [
+		"git:github.com/badlogic/pi-subagent",
+	]);
+	assert.equal(existsSync(join(f.agentDir, "extensions/subagent")), false);
+	assert.deepEqual(calls(f), []);
+});
+
 test("does not declare or deploy interactive shell", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
@@ -327,7 +339,8 @@ test("leaves unmanaged files, packages, caches and old configs untouched", (t) =
   ".pi/agent/extensions/openai-fast/index.ts", ".pi/agent/extensions/openai-fast.json",
   ".pi/agent/extensions/work-animation.ts", ".pi/agent/extensions/work-animation.json",
   ".pi/agent/extensions/image-gen.ts", ".pi/web-search.json",
-  ".pi/agent/extensions/subagent/config.json", ".pi/agent/profiles/pi-subagents/profile.json",
+  ".pi/agent/extensions/subagent/config.json", ".pi/agent/extensions/subagent/index.ts",
+  ".pi/agent/bin/subagent", ".pi/agent/profiles/pi-subagents/profile.json",
   ".pi/agent/pi-subagents/last-seen-version.json", ".pi/agent/sol-pi.json",
   ".pi/agent/git/github.com/NVlabs/SoL-Pi/index.ts",
   ".pi/agent/sessions/project/sol-pi/cache", ".pi/agent/auth.json",

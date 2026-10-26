@@ -22,6 +22,7 @@
 	"packages": [
 		"npm:pi-web-access",
 		"npm:@juicesharp/rpiv-ask-user-question",
+		"git:github.com/badlogic/pi-subagent",
 		"npm:@specode/pi-kimi-cu",
 		"npm:@specode/pi-kimi-webbridge-bootstrap",
 		"npm:@specode/pi-last-model-effort",

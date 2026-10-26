@@ -52,6 +52,7 @@ npx skills update -g
 | 插件 | 用途 |
 | --- | --- |
 | `rpiv-ask-user-question` | 在关键决策处提供结构化选项 |
+| `pi-subagent` | 启动可观察、可继续对话的独立子代理，用于审查、排查和委派实现 |
 | `pi-fff` | 按文件名和内容搜索；默认接管 `find`、`grep`，不扫描整个 HOME |
 | `pi-web-access` | 网页搜索与内容读取 |
 | `pi-kimi-cu` | 操作 macOS 应用 |
@@ -63,6 +64,14 @@ Antigravity 也提供 Google 搜索与图片生成；需要这条通道时直接
 搜索配置：
 - [文件搜索](harnesses/pi/plugin-configs/pi-fff/config.json) → `~/.pi/agent/pi-fff.json`
 - [网页搜索](harnesses/pi/plugin-configs/web-search/config.json) → `~/.pi/agent/web-search.json`
+
+#### 子代理
+
+[pi-subagent](https://github.com/badlogic/pi-subagent) 通过 `git:github.com/badlogic/pi-subagent` 引入，不固定版本、标签或提交；首次安装使用上游默认分支，后续通过 `pi update --extensions` 更新。
+
+需要 `tmux`，并按上游说明将 `subagent` CLI 加入 `PATH`。Git 包安装后的 CLI 入口为 `~/.pi/agent/git/github.com/badlogic/pi-subagent/subagent.ts`；仓库安装器只部署包声明，不安装 tmux 或配置 CLI 链接。不要同时启用手工克隆的 `~/.pi/agent/extensions/subagent` 和 Git 包，以免重复加载。
+
+直接用自然语言要求委派任务；子代理默认继承父会话的模型与思考档位。`/subagent` 可选择并进入子代理会话，CLI 支持 `subagent list`、`subagent send`、`subagent wait` 和 `subagent stop`。子代理会独立调用模型，可能消耗额外额度。
 
 #### 会话界面
 
