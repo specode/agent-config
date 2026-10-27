@@ -55,7 +55,7 @@ function backupAgent(f) {
 	return join(root, backups[0], "pi/.pi/agent");
 }
 
-test("installs the remaining model order without Claude Bridge", (t) => {
+test("installs Claude Bridge after the Antigravity model order", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
@@ -69,9 +69,11 @@ test("installs the remaining model order without Claude Bridge", (t) => {
 			"antigravity/gemini-3.8-flash",
 			"antigravity/claude-opus-5-5",
 			"antigravity/claude-sonnet-5-5",
+			"claude-bridge/claude-opus-5-5",
+			"claude-bridge/claude-sonnet-5-5",
 		],
 	);
-	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), false);
+	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), true);
 });
 
 test("declares the upstream subagent Git package without a pinned ref", (t) => {

@@ -94,7 +94,9 @@ Antigravity 也提供 Google 搜索与图片生成；需要这条通道时直接
 
 通过 `/login` 登录 provider，`/model` 选择模型。GPT 使用 `openai-codex`；Antigravity 模型由 `pi-antigravity` 提供，可用 `/antigravity.refresh` 刷新目录。
 
-仓库模型轮换顺序为 GPT-6 Astra → GPT-6.1 Sol → Grok 4.7 → Antigravity 模型。具体范围见 [settings.json](harnesses/pi/config/settings.json)，列入清单不代表账号已获授权。
+`pi-claude-bridge` 把 Claude Code 作为 provider。启用模型为 `claude-bridge/claude-opus-5-5` 和 `claude-bridge/claude-sonnet-5-5`，选择器中显示为 Claude Opus 5.5 和 Claude Sonnet 5.5。使用前需完成 `claude auth login`；列入清单不代表订阅已包含这两个模型。
+
+仓库模型轮换顺序为 GPT-6 Astra → GPT-6.1 Sol → Grok 4.7 → Antigravity 模型 → Claude Bridge 的 Opus 5.5 与 Sonnet 5.5。具体范围见 [settings.json](harnesses/pi/config/settings.json)，列入清单不代表账号已获授权。
 
 [Fast](harnesses/pi/builtins/fast/README.md) 通过 `/fast` 切换，`/fast status` 查询，`/fast off` 关闭。开关按 provider 保存在 `~/.pi/agent/state/fast.json`；`fast` 标记表示本地已启用，不保证后端实际加速。
 
