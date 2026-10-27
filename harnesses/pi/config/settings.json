@@ -1,15 +1,15 @@
 {
 	"theme": "system",
 	"enabledModels": [
+		"claude-bridge/claude-opus-5-5",
+		"claude-bridge/claude-sonnet-5-5",
 		"openai-codex/gpt-6-astra",
 		"openai-codex/gpt-6.1-sol",
 		"xai/grok-4.7",
 		"antigravity/gemini-4-argon",
 		"antigravity/gemini-3.8-flash",
 		"antigravity/claude-opus-5-5",
-		"antigravity/claude-sonnet-5-5",
-		"claude-bridge/claude-opus-5-5",
-		"claude-bridge/claude-sonnet-5-5"
+		"antigravity/claude-sonnet-5-5"
 	],
 	"defaultTools": ["+codemode"],
 	"externalEditor": "nvim",
@@ -25,14 +25,14 @@
 		"npm:pi-web-access",
 		"npm:@juicesharp/rpiv-ask-user-question",
 		"git:github.com/badlogic/pi-subagent",
-		"npm:@specode/pi-kimi-cu",
-		"npm:@specode/pi-kimi-webbridge-bootstrap",
+		"npm:@ff-labs/pi-fff",
+		"npm:pi-claude-bridge",
 		"npm:@specode/pi-last-model-effort",
 		"npm:@specode/pi-subscription-usage",
+		"npm:@specode/pi-kimi-webbridge-bootstrap",
+		"npm:@specode/pi-kimi-cu",
 		"npm:@specode/pi-subscription-image",
-		"npm:pi-antigravity",
-		"npm:@ff-labs/pi-fff",
-		"npm:pi-claude-bridge"
+		"npm:pi-antigravity"
 	],
 	"hideThinkingBlock": true,
 	"fullscreenScrollbar": "auto",
