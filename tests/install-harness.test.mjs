@@ -55,22 +55,23 @@ function backupAgent(f) {
 	return join(root, backups[0], "pi/.pi/agent");
 }
 
-test("installs Claude Bridge after the Antigravity model order", (t) => {
+test("installs Google Gemini 4 after the Antigravity Gemini 4 model", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.deepEqual(
 		settings.enabledModels,
 		[
+			"claude-bridge/claude-opus-5-5",
+			"claude-bridge/claude-sonnet-5-5",
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
 			"xai/grok-4.7",
 			"antigravity/gemini-4-argon",
+			"google/gemini-4-argon",
 			"antigravity/gemini-3.8-flash",
 			"antigravity/claude-opus-5-5",
 			"antigravity/claude-sonnet-5-5",
-			"claude-bridge/claude-opus-5-5",
-			"claude-bridge/claude-sonnet-5-5",
 		],
 	);
 	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), true);
