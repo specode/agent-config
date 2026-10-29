@@ -66,7 +66,7 @@ npx skills update -g
 
 用 `/login` 登录各家账号后，通过 `Ctrl+L` 或 `/model` 切换模型。[settings.json](harnesses/pi/config/settings.json) 中启用的模型顺序如下（列在配置里只控制选择器显示，实际能否调用取决于账号权限）：
 
-1. **Claude Bridge**（`pi-claude-bridge`）：复用本机 Claude Code 登录态（需先执行 `claude auth login`），启用 `claude-bridge/claude-opus-5-5` 和 `claude-bridge/claude-sonnet-5-5`。
+1. **Claude Bridge**（`pi-claude-bridge`）：复用本机 Claude Code 登录态（需先执行 `claude auth login`），启用 `claude-bridge/claude-opus-5-5` 和 `claude-bridge/claude-sonnet-5-5`。按 Max 计划配置（`provider.plan: "max"`），配置文件为 [harnesses/pi/plugin-configs/claude-bridge/config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json`。
 2. **OpenAI Codex**：启用 `openai-codex/gpt-6-astra` 和 `openai-codex/gpt-6.1-sol`。
 3. **xAI**：启用 `xai/grok-4.7`。
 4. **Antigravity 与 Google Gemini**：`pi-antigravity` 提供 `antigravity/gemini-4-argon`、`gemini-3.8-flash`、`claude-opus-5-5`、`claude-sonnet-5-5`（可用 `/antigravity.refresh` 刷新目录）；内置 `google` 通道启用 `google/gemini-4-argon`，读取环境变量 `GEMINI_API_KEY`，与 Antigravity 互不依赖。

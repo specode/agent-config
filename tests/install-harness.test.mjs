@@ -144,6 +144,7 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
 		"plugin-configs/web-search/config.json": ".pi/agent/web-search.json",
 		"plugin-configs/pi-fff/config.json": ".pi/agent/pi-fff.json",
+		"plugin-configs/claude-bridge/config.json": ".pi/agent/claude-bridge.json",
 	};
 	for (const [source, target] of Object.entries(files)) {
 		assert.equal(
@@ -338,7 +339,7 @@ test("leaves unmanaged files, packages, caches and old configs untouched", (t) =
  const f = fixture(t);
  const paths = [
   ".pi/agent/interactive-shell.json",
-  ".pi/agent/claude-bridge.json", ".pi/agent/extensions/session-ui.ts",
+  ".pi/agent/extensions/session-ui.ts",
   ".pi/agent/extensions/openai-fast/index.ts", ".pi/agent/extensions/openai-fast.json",
   ".pi/agent/extensions/work-animation.ts", ".pi/agent/extensions/work-animation.json",
   ".pi/agent/extensions/image-gen.ts", ".pi/web-search.json",
