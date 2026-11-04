@@ -1,34 +1,36 @@
 # Agent Config
 
-个人使用的 Pi（1.4.0）与 Claude Code 配置。只管理配置文件和本地扩展，不含凭据与会话数据。
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
-## 快速开始
+Personal configuration for Pi (1.4.0) and Claude Code. Manages only config files and local extensions; credentials and session data are excluded.
 
-依赖：`rsync`、`jq`、Nerd Font。
+## Quick Start
+
+Prerequisites: `rsync`, `jq`, and a Nerd Font.
 
 ```bash
-# 安装 / 更新配置（有差异会先显示 diff，确认后备份到 ~/.agent-config-backups/）
+# Install / update configs (shows a diff on conflict and backs up to ~/.agent-config-backups/ after confirmation)
 ./install-rules.sh
 ./install-harness.sh pi
 ./install-harness.sh claude-code
 
-# 更新 Pi 本体与外部插件
+# Update Pi and external packages
 pi update
 pi update --extensions
 ```
 
-回滚时从 `~/.agent-config-backups/` 拷回原路径即可。
+To roll back, copy the backed-up files from `~/.agent-config-backups/` back to their original paths.
 
-默认偏好：
-- Pi：全屏 TUI、`system` 主题、隐藏 thinking、折叠更新日志、启用 `codemode`、外部编辑器 `nvim`。
-- Fast：默认关闭。
-- Claude Code：全屏 TUI、`auto` 主题与权限、`high` 思考档位、自动压缩上下文、开启通知、关闭反馈草稿。
+Default preferences:
+- Pi: fullscreen TUI, `system` theme, hidden thinking, condensed changelog, `codemode` enabled, external editor `nvim`.
+- Fast: disabled by default.
+- Claude Code: fullscreen TUI, `auto` theme and permissions, `high` effort, auto-compact context, notifications enabled, feedback drafts disabled.
 
-## 使用说明
+## Usage
 
-### 通用规则与 Skills
+### Shared Rules & Skills
 
-[rules/AGENTS.md](rules/AGENTS.md) 维护跨工具全局规则（中文回复、先核实后提问、模块化、排查到底）。运行 `./install-rules.sh` 会同步覆盖：
+[rules/AGENTS.md](rules/AGENTS.md) maintains cross-harness global rules (respond in Simplified Chinese, verify before asking, modular design, investigate to root cause). Running `./install-rules.sh` syncs it to:
 
 ```text
 ~/.agents/AGENTS.md
@@ -38,7 +40,7 @@ pi update --extensions
 ~/.grok/AGENTS.md
 ```
 
-共用 Skills 装在 `~/.agents/skills/`（Remotion、UI/UX Pro Max、TypeSafe AI、GSAP），用 `npx skills` 管理：
+Shared skills are installed under `~/.agents/skills/` (Remotion, UI/UX Pro Max, TypeSafe AI, GSAP) and managed with `npx skills`:
 
 ```bash
 npx skills list -g -a claude-code pi
@@ -48,77 +50,77 @@ npx skills update -g
 
 ### Pi
 
-#### 界面与快捷键
+#### UI & Keybindings
 
-[session-ui](harnesses/pi/builtins/session-ui/README.md) 提供单行状态栏、工具进度、工作动画、回合耗时、自动标题/会话命名，以及剪贴板图片紧凑粘贴与预览。状态栏订阅额度来自 `pi-subscription-usage`，上次使用的模型和档位由 `pi-last-model-effort` 记录。
+[session-ui](harnesses/pi/builtins/session-ui/README.md) provides a single-line statusline, tool activity panel, work animation, turn duration, automatic terminal title and session naming, and compact clipboard image paste with preview. Subscription quota in the statusline comes from `pi-subscription-usage`, and the last active model and effort are persisted by `pi-last-model-effort`.
 
-| 操作 | 命令 / 快捷键 |
+| Action | Command / Keybinding |
 | --- | --- |
-| 思考档位 | `/effort`、`/effort status` |
-| 切换状态栏 | `/statusline` |
-| 工作动画 | `/work-animation on\|off\|status` |
-| 会话命名 | `/name` |
-| 切换模型 | `Ctrl+L` 或 `/model` |
-| 翻整页 | `Alt+K` / `Alt+J` |
-| 跳到顶 / 底 | `Alt+,` / `Alt+.` |
-| 粘贴并预览图片 | `Ctrl+V`（macOS，光标移入 `[image #1]` 预览） |
+| Thinking effort | `/effort`, `/effort status` |
+| Toggle statusline | `/statusline` |
+| Work animation | `/work-animation on\|off\|status` |
+| Name session | `/name` |
+| Select model | `Ctrl+L` or `/model` |
+| Page up / down | `Alt+K` / `Alt+J` |
+| Jump to top / bottom | `Alt+,` / `Alt+.` |
+| Paste & preview image | `Ctrl+V` (macOS; move cursor onto `[image #1]` to preview) |
 
-配置路径（改完 `/reload` 生效）：
+Config paths (run `/reload` after changes):
 - [harnesses/pi/plugin-configs/session-ui/config.json](harnesses/pi/plugin-configs/session-ui/config.json) → `~/.pi/agent/extensions/session-ui/config.json`
 - [harnesses/pi/config/settings.json](harnesses/pi/config/settings.json) → `~/.pi/agent/settings.json`
 - [harnesses/pi/config/keybindings.json](harnesses/pi/config/keybindings.json) → `~/.pi/agent/keybindings.json`
-- `~/.pi/agent/state/session-ui.json`（工作动画开关状态）
+- `~/.pi/agent/state/session-ui.json` (work animation toggle state)
 
-#### 模型与 Fast
+#### Models & Fast
 
-| 通道 | 启用模型 | 备注 / 配置 |
+| Provider | Enabled Models | Notes / Config |
 | --- | --- | --- |
-| `claude-bridge` | 无（保留插件与配置） | 复用 `claude auth login`（Max）；[config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
-| `openai-codex` | `gpt-6-astra`、`gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`（本地上下文设为 500K） |
-| `xai` | `grok-4.7` | OAuth 登录 |
-| `antigravity` | `gemini-4-argon`、`gemini-3.8-flash`、`claude-opus-5-5`、`claude-sonnet-5-5` | `/antigravity.refresh` 刷新列表 |
-| `google` | `gemini-4-argon` | 环境变量 `GEMINI_API_KEY` |
+| `claude-bridge` | none (plugin and config retained) | Reuses `claude auth login` (Max); [config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
+| `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (local context window set to 500K) |
+| `xai` | `grok-4.7` | OAuth login |
+| `antigravity` | `gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5` | Refresh catalog with `/antigravity.refresh` |
+| `google` | `gemini-4-argon` | `GEMINI_API_KEY` environment variable |
 
-[Fast](harnesses/pi/builtins/fast/README.md) 高优先级请求：`/fast [on|off|status]`。
-- 配置：[harnesses/pi/plugin-configs/fast/config.json](harnesses/pi/plugin-configs/fast/config.json) → `~/.pi/agent/extensions/fast.json`
-- 状态：`~/.pi/agent/state/fast.json`（按 provider 记忆）
+[Fast](harnesses/pi/builtins/fast/README.md) priority requests: `/fast [on|off|status]`.
+- Config: [harnesses/pi/plugin-configs/fast/config.json](harnesses/pi/plugin-configs/fast/config.json) → `~/.pi/agent/extensions/fast.json`
+- State: `~/.pi/agent/state/fast.json` (remembered per provider)
 
-#### 搜索与扩展工具
+#### Search & Extension Tools
 
-| 插件 | 用途 | 配置 / 依赖 |
+| Package | Purpose | Config / Requirements |
 | --- | --- | --- |
-| `pi-fff` | 文件与代码搜索（接管 `find` / `grep`） | [config.json](harnesses/pi/plugin-configs/pi-fff/config.json) → `~/.pi/agent/pi-fff.json` |
-| `pi-web-access` | 网页搜索与抓取（`openai → xai → kimi`） | [config.json](harnesses/pi/plugin-configs/web-search/config.json) → `~/.pi/agent/web-search.json` |
-| `rpiv-ask-user-question` | 结构化选项提问 | — |
-| `pi-kimi-webbridge-bootstrap` | 操作已登录浏览器 | 需配套浏览器扩展 |
-| `pi-kimi-cu` | 操作 macOS 桌面应用 | 需辅助功能与录屏权限 |
-| `pi-subscription-image` | Codex / Grok 订阅生图（参考图走 Codex） | — |
-| [pi-subagent](https://github.com/badlogic/pi-subagent) | `tmux` 子代理（`/subagent` 或 CLI `subagent`） | 需 `tmux`，并将 `subagent.ts` 链入 `PATH` |
+| `pi-fff` | File and code search (overrides `find` / `grep`) | [config.json](harnesses/pi/plugin-configs/pi-fff/config.json) → `~/.pi/agent/pi-fff.json` |
+| `pi-web-access` | Web search and fetching (`openai → xai → kimi`) | [config.json](harnesses/pi/plugin-configs/web-search/config.json) → `~/.pi/agent/web-search.json` |
+| `rpiv-ask-user-question` | Structured multiple-choice user questions | — |
+| `pi-kimi-webbridge-bootstrap` | Operate logged-in browser sessions | Requires companion browser extension |
+| `pi-kimi-cu` | Operate macOS desktop apps | Requires Accessibility and Screen Recording permissions |
+| `pi-subscription-image` | Codex / Grok subscription image generation (reference edits via Codex) | — |
+| [pi-subagent](https://github.com/badlogic/pi-subagent) | `tmux` subagents (`/subagent` or CLI `subagent`) | Requires `tmux` and symlinking `subagent.ts` into `PATH` |
 
-#### Codemode 与 MCP
+#### Codemode & MCP
 
-默认开启 `codemode`，支持用脚本并发调用工具或过滤结果。
+`codemode` is enabled by default for batching tool calls or filtering large outputs in scripts.
 
-MCP 配置位于 `~/.pi/agent/mcp.json` 或项目 `.pi/mcp.json`（不托管）：
+MCP is configured in `~/.pi/agent/mcp.json` or project `.pi/mcp.json` (unmanaged):
 
 ```text
-/mcp                  # TUI 查看状态、登录、重连、启停
-pi mcp list           # CLI 查看连接
-pi mcp login <server> # CLI OAuth 登录
+/mcp                  # View status, log in, reconnect, or toggle servers in TUI
+pi mcp list           # List connections from CLI
+pi mcp login <server> # Authenticate via OAuth from CLI
 ```
 
 ### Claude Code
 
-默认启用 `gopls-lsp` 与 `swift-lsp`（需本机安装对应 LSP）。底部单行状态栏与 Pi 一致，显示模型、档位、目录、分支、上下文、5h/7d 额度与缓存命中率。TUI 模式用 `/tui fullscreen|default` 切换。
+Enables `gopls-lsp` and `swift-lsp` by default (requires the corresponding language servers installed locally). Uses a single-line footer statusline matching Pi, showing model, effort, directory, branch, context, 5h/7d quota, and cache hit rate. Switch TUI mode with `/tui fullscreen|default`.
 
-| 快捷键 | 操作 |
+| Keybinding | Action |
 | --- | --- |
-| `Ctrl+L` | 选择模型 |
-| `Alt+K` / `Alt+J` | 上 / 下翻整页 |
-| `Alt+U` / `Alt+D` | 上 / 下翻半页 |
-| `Alt+,` / `Alt+.` | 跳到顶部 / 底部 |
+| `Ctrl+L` | Select model |
+| `Alt+K` / `Alt+J` | Page up / down |
+| `Alt+U` / `Alt+D` | Half-page up / down |
+| `Alt+,` / `Alt+.` | Jump to top / bottom |
 
-配置路径：
+Config paths:
 - [harnesses/claude-code/settings.json](harnesses/claude-code/settings.json) → `~/.claude/settings.json`
 - [harnesses/claude-code/keybindings.json](harnesses/claude-code/keybindings.json) → `~/.claude/keybindings.json`
 - [harnesses/claude-code/statusline-command.sh](harnesses/claude-code/statusline-command.sh) → `~/.claude/statusline-command.sh`

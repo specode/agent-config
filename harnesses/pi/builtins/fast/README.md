@@ -1,20 +1,22 @@
 # Fast
 
-Pi 扩展，用 `/fast` 为订阅模型开启加速通道：OpenAI / Codex 附加 `service_tier: "priority"`，Grok 4.7 路由至 Grok Build 的 `grok-4.7-build-fast`。默认关闭，可独立安装。
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
-## 快速开始
+Pi extension that enables fast-mode routing for subscription models via `/fast`: attaches `service_tier: "priority"` for OpenAI / Codex and routes Grok 4.7 to `grok-4.7-build-fast` via the Grok Build proxy. Disabled by default and installable standalone.
 
-先在 Pi 中用 `/login` 登录 ChatGPT 或 xAI OAuth 账号（不支持 API Key），再任选一种方式安装：
+## Quick Start
+
+Log in to your ChatGPT or xAI OAuth account in Pi with `/login` first (API keys are not supported), then install using either method:
 
 ```bash
-# 方式一：安装入口文件（保留目录全部源码）
+# Option 1: install the entry file (keep the full directory intact)
 pi install /absolute/path/to/fast/index.ts
 
-# 方式二：复制目录到扩展目录（二选一，避免重复加载）
+# Option 2: copy the directory into extensions (choose one to avoid duplicate loading)
 cp -R /absolute/path/to/fast ~/.pi/agent/extensions/fast
 ```
 
-在 Pi 中启用：
+Enable in Pi:
 
 ```text
 /reload
@@ -22,37 +24,37 @@ cp -R /absolute/path/to/fast ~/.pi/agent/extensions/fast
 /fast status
 ```
 
-## 使用说明
+## Usage
 
-### 命令与状态
+### Commands & State
 
-| 命令 | 说明 |
+| Command | Description |
 | --- | --- |
-| `/fast` | 切换当前 provider 开关 |
-| `/fast on` | 开启 |
-| `/fast off` | 关闭 |
-| `/fast status` | 查看当前状态 |
+| `/fast` | Toggle for the active provider |
+| `/fast on` | Enable |
+| `/fast off` | Disable |
+| `/fast status` | Show current status |
 
-- 输出单行 `Fast: on`、`Fast: off` 或 `Fast: unavailable (原因)`；`Fast: on` 仅代表本地已按加速策略发请求。
-- `openai`、`openai-codex`、`xai` 的开关按 provider 独立保存在状态文件中，跨会话保留。
-- 切到不支持的模型或认证方式时不修改请求；此时手动执行 `/fast` 会报不可用，并将该 provider 已保存的开启状态重置为关闭。
+- Outputs a single line: `Fast: on`, `Fast: off`, or `Fast: unavailable (<reason>)`. `Fast: on` only indicates that local fast-mode request handling is active.
+- Switches for `openai`, `openai-codex`, and `xai` are saved independently per provider in the state file and persist across sessions.
+- Requests are left untouched when switching to an unsupported model or auth mode; running `/fast` manually in that state reports unavailable and resets any saved `on` state for that provider to `off`.
 
-### 通道规则
+### Provider Rules
 
-| Provider | API | 模型范围 | 本地请求处理 |
+| Provider | API | Model Scope | Local Request Handling |
 | --- | --- | --- | --- |
-| `openai` | `openai-responses` | 不限模型 ID | 未设置 `service_tier` 时注入 `"priority"`（保留已有值） |
-| `openai-codex` | `openai-codex-responses` | 不限模型 ID | 未设置 `service_tier` 时注入 `"priority"`（保留已有值） |
-| `xai` | `openai-responses` | 仅 `xai/grok-4.7` | 走 Grok Build 代理 `grok-4.7-build-fast`；会话记录与模型选择器保持 `xai/grok-4.7`，本地按目录单价 2 倍估算费用 |
+| `openai` | `openai-responses` | Any model ID | Injects `"priority"` when `service_tier` is unset (preserves existing values) |
+| `openai-codex` | `openai-codex-responses` | Any model ID | Injects `"priority"` when `service_tier` is unset (preserves existing values) |
+| `xai` | `openai-responses` | `xai/grok-4.7` only | Routes through the Grok Build proxy as `grok-4.7-build-fast`; session history and model selector stay `xai/grok-4.7`, with local cost estimated at 2x catalog rate |
 
-若 Grok 代理因客户端版本过低返回 `426`，在配置中调高 `grokClientVersion` 即可。
+If the Grok proxy returns `426` due to a minimum client version bump, increase `grokClientVersion` in the config file.
 
-### 配置文件
+### Configuration
 
-- 配置：`~/.pi/agent/extensions/fast.json`（只读）
-- 状态：`~/.pi/agent/state/fast.json`（扩展自动维护）
+- Config: `~/.pi/agent/extensions/fast.json` (read-only)
+- State: `~/.pi/agent/state/fast.json` (managed by the extension)
 
-设置 `PI_CODING_AGENT_DIR` 时均位于该目录下。配置示例（字段均可省略）：
+Both resolve under `PI_CODING_AGENT_DIR` when set. Example config (all fields are optional):
 
 ```json
 {
@@ -62,10 +64,10 @@ cp -R /absolute/path/to/fast ~/.pi/agent/extensions/fast
 }
 ```
 
-| 字段 | 默认值 | 用途 |
+| Field | Default | Purpose |
 | --- | --- | --- |
-| `enabled` | `false` | 尚未手动切换过开关时的初始默认值 |
-| `showStatus` | `true` | 是否向状态栏发布 `fast` 标记 |
-| `grokClientVersion` | `"1.0.40"` | 向 Grok Build 代理声明的客户端版本 |
+| `enabled` | `false` | Initial default before a provider switch has been toggled manually |
+| `showStatus` | `true` | Whether to publish the `fast` badge to the statusline |
+| `grokClientVersion` | `"1.0.40"` | Client version declared to the Grok Build proxy |
 
-配置文件存在未知字段或类型错误时，启动会报错并停用 Fast，修复后 `/reload` 恢复。
+If the config file contains unknown fields or invalid types, Fast reports an error on startup and stays inactive until fixed and reloaded with `/reload`.
