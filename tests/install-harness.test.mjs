@@ -55,13 +55,15 @@ function backupAgent(f) {
 	return join(root, backups[0], "pi/.pi/agent");
 }
 
-test("installs the enabled model list without Claude Bridge models while retaining its package", (t) => {
+test("installs the enabled model list with Claude Bridge models first", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
 	assert.deepEqual(
 		settings.enabledModels,
 		[
+			"claude-bridge/claude-opus-5-5",
+			"claude-bridge/claude-sonnet-5-5",
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
 			"xai/grok-4.7",

@@ -1,6 +1,8 @@
 {
 	"theme": "system",
 	"enabledModels": [
+		"claude-bridge/claude-opus-5-5",
+		"claude-bridge/claude-sonnet-5-5",
 		"openai-codex/gpt-6-astra",
 		"openai-codex/gpt-6.1-sol",
 		"xai/grok-4.7",

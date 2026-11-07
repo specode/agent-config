@@ -75,7 +75,7 @@ npx skills update -g
 
 | 通道 | 启用模型 | 备注 / 配置 |
 | --- | --- | --- |
-| `claude-bridge` | 无（保留插件与配置） | 复用 `claude auth login`（Max）；[config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
+| `claude-bridge` | `claude-opus-5-5`、`claude-sonnet-5-5` | 复用 `claude auth login`（Max）；[config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
 | `openai-codex` | `gpt-6-astra`、`gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`（本地上下文设为 500K） |
 | `xai` | `grok-4.7` | OAuth 登录 |
 | `antigravity` | `gemini-4-argon`、`gemini-3.8-flash`、`claude-opus-5-5`、`claude-sonnet-5-5` | `/antigravity.refresh` 刷新列表 |
