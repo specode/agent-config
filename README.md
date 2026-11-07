@@ -76,7 +76,7 @@ Config paths (run `/reload` after changes):
 | Provider | Enabled Models | Notes / Config |
 | --- | --- | --- |
 | `claude-bridge` | `claude-opus-5-5`, `claude-sonnet-5-5` | Reuses `claude auth login` (Max); [config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
-| `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (local context window set to 500K) |
+| `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (`gpt-6-astra` local context window set to 500K) |
 | `xai` | `grok-4.7` | OAuth login |
 | `antigravity` | `gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5` | Refresh catalog with `/antigravity.refresh` |
 | `google` | `gemini-4-argon` | `GEMINI_API_KEY` environment variable |

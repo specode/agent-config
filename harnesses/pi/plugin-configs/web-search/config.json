@@ -1,5 +1,5 @@
 {
-	"workflow": "auto-summary",
+	"workflow": "none",
 	"allowBrowserCookies": false,
 	"searchRouting": {
 		"providers": ["openai", "xai", "kimi"],

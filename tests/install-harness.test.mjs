@@ -100,7 +100,7 @@ test("does not declare or deploy interactive shell", (t) => {
 	assert.deepEqual(calls(f), []);
 });
 
-test("installs only the two requested Codex context overrides", (t) => {
+test("installs only the requested Codex context override", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const target = join(f.agentDir, "models.json");
@@ -110,7 +110,6 @@ test("installs only the two requested Codex context overrides", (t) => {
 			"openai-codex": {
 				modelOverrides: {
 					"gpt-6-astra": { contextWindow: 500000 },
-					"gpt-6.1-sol": { contextWindow: 500000 },
 				},
 			},
 		},
@@ -330,7 +329,7 @@ test("installs web-search.json into the Pi agent directory", (t) => {
 	assert.equal(existsSync(join(f.home, ".pi/web-search.json")), false);
 	assert.match(
 		readFileSync(join(f.agentDir, "web-search.json"), "utf8"),
-		/auto-summary/,
+		/"workflow": "none"/,
 	);
 });
 
