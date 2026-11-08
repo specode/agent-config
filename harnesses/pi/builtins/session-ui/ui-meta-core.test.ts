@@ -72,6 +72,16 @@ test("sanitizes controls, bidi overrides, whitespace, and visible length", () =>
 		"Fix log…",
 	);
 	assert.equal(sanitizeUiMetaText("abcdef", 4), "abc…");
+	assert.equal(sanitizeUiMetaText("می‌خواهم", 16), "می‌خواهم");
+	assert.equal(sanitizeUiMetaText("👨‍👩‍👧", 16), "👨‍👩‍👧");
+	assert.equal(
+		sanitizeUiMetaText("a\u200Bb\uFEFFc\u202Ed\u2060e\u2066f\u2069", 16),
+		"abcdef",
+	);
+	assert.equal(sanitizeUiMetaText("🇺🇳🇯🇵🇫🇷", 2), "🇺🇳…");
+	assert.equal(sanitizeUiMetaText("🇺🇳🇯🇵🇫🇷🇩🇪", 3), "🇺🇳🇯🇵…");
+	assert.equal(sanitizeUiMetaText("👨‍👩‍👧👨‍👩‍👧👨‍👩‍👧", 2), "👨‍👩‍👧…");
+	assert.equal(sanitizeUiMetaText("क्षत्रिय", 2), "क्ष…");
 });
 
 test("strips complete metadata without removing the normal response", () => {

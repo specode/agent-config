@@ -10,10 +10,10 @@ INSTALL_OUTPUT_MODE='summary'
 
 usage() {
 	cat <<'EOF'
-用法：./install-harness.sh <harness>
-      ./install-harness.sh --list
+Usage: ./install-harness.sh <harness>
+       ./install-harness.sh --list
 
-可安装的 harness：
+Available harnesses:
   claude-code
   pi
 EOF
@@ -24,7 +24,7 @@ prepare_pi_session_ui() {
 	local config="$AGENT_CONFIG_ROOT/harnesses/pi/plugin-configs/session-ui/config.json"
 
 	if ! command -v rsync >/dev/null 2>&1; then
-		error '安装托管目录需要 rsync'
+		error 'rsync is required to install managed directories'
 		return 1
 	fi
 	validate_repository_source "$source" directory
@@ -50,15 +50,15 @@ HARNESS_ID="$1"
 case "$HARNESS_ID" in
 claude-code)
 	if ! command -v jq >/dev/null 2>&1; then
-		error 'Claude Code 状态栏依赖 jq；请先安装 jq'
+		error 'Claude Code status line requires jq; please install jq first'
 		exit 1
 	fi
 	HARNESS_LABEL='Claude Code'
 	managed_entries() {
 		printf '%s\n' \
-			'harnesses/claude-code/settings.json|.claude/settings.json|file|-|配置|通用设置' \
-			'harnesses/claude-code/keybindings.json|.claude/keybindings.json|file|-|配置|快捷键' \
-			'harnesses/claude-code/statusline-command.sh|.claude/statusline-command.sh|file|-|插件|状态栏'
+			'harnesses/claude-code/settings.json|.claude/settings.json|file|-|config|general settings' \
+			'harnesses/claude-code/keybindings.json|.claude/keybindings.json|file|-|config|keybindings' \
+			'harnesses/claude-code/statusline-command.sh|.claude/statusline-command.sh|file|-|plugin|status line'
 	}
 	;;
 pi)
@@ -66,15 +66,15 @@ pi)
 	prepare_pi_session_ui
 	managed_entries() {
 		printf '%s\n' \
-			'harnesses/pi/config/settings.json|.pi/agent/settings.json|file|-|配置|通用设置' \
-			'harnesses/pi/config/models.json|.pi/agent/models.json|file|-|配置|模型覆盖' \
-			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|配置|快捷键' \
-			"$PI_SESSION_UI_SOURCE|.pi/agent/extensions/session-ui|directory|-|插件|session-ui" \
-			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|插件|Fast' \
-			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|配置|Fast' \
-			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|配置|FFF' \
-			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|配置|Web Search' \
-			'harnesses/pi/plugin-configs/claude-bridge/config.json|.pi/agent/claude-bridge.json|file|-|配置|Claude Bridge'
+			'harnesses/pi/config/settings.json|.pi/agent/settings.json|file|-|config|general settings' \
+			'harnesses/pi/config/models.json|.pi/agent/models.json|file|-|config|model overrides' \
+			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|config|keybindings' \
+			"$PI_SESSION_UI_SOURCE|.pi/agent/extensions/session-ui|directory|-|plugin|session-ui" \
+			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|plugin|Fast' \
+			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|config|Fast' \
+			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|config|FFF' \
+			'harnesses/pi/plugin-configs/web-search/config.json|.pi/agent/web-search.json|file|-|config|Web Search' \
+			'harnesses/pi/plugin-configs/claude-bridge/config.json|.pi/agent/claude-bridge.json|file|-|config|Claude Bridge'
 	}
 	;;
 -h | --help)
@@ -83,12 +83,12 @@ pi)
 	;;
 *)
 	usage >&2
-	error "未知 harness：$HARNESS_ID"
+	error "Unknown harness: $HARNESS_ID"
 	exit 1
 	;;
 esac
 
 install_managed_group "$HARNESS_ID" "$HARNESS_LABEL"
 if [ "${INSTALL_MANAGED_CHANGED:-0}" -eq 1 ]; then
-	success "$HARNESS_LABEL 配置安装完成"
+	success "$HARNESS_LABEL configuration installed"
 fi

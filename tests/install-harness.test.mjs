@@ -256,7 +256,7 @@ process.exit(result.status ?? 1);
 `, { mode: 0o755 });
 	const result = install(f);
 	assert.notEqual(result.status, 0);
-	assert.match(result.stderr, /安装失败/);
+	assert.match(result.stderr, /Install failed/);
 	assert.equal(readFileSync(join(f.agentDir, "models.json"), "utf8"), oldModels);
 	assert.equal(existsSync(join(target, "index.ts")), false);
 	assert.equal(readFileSync(join(target, "config.json"), "utf8"), oldConfig);

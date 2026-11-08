@@ -36,7 +36,7 @@ record_managed_change() {
 	local item_name="$4"
 	local fallback_name="$5"
 
-	[ -n "$item_type" ] || item_type='配置'
+	[ -n "$item_type" ] || item_type='config'
 	[ -n "$item_name" ] || item_name="$fallback_name"
 	printf '%s|%s|%s\n' "$change_type" "$item_type" "$item_name" >>"$changes_log"
 }
@@ -45,7 +45,7 @@ show_managed_change_summary() {
 	local changes_log="$1"
 	local label="$2"
 	local normalized_log="$INSTALL_TEMP_ROOT/normalized-changes.$$"
-	local item_type change_type names
+	local item_type change_type item_label change_label names
 
 	[ -s "$changes_log" ] || return 0
 
@@ -59,7 +59,7 @@ show_managed_change_summary() {
 				item_name[key] = $3
 				change_type[key] = $1
 			}
-			if ($1 == "更新") {
+			if ($1 == "updated") {
 				change_type[key] = $1
 			}
 		}
@@ -71,18 +71,26 @@ show_managed_change_summary() {
 		}
 	' "$changes_log" >"$normalized_log"
 
-	printf '%s 检测到变更：\n' "$label"
-	for item_type in '插件' '配置'; do
-		for change_type in '新增' '更新'; do
+	printf '%s changes detected:\n' "$label"
+	for item_type in 'plugin' 'config'; do
+		case "$item_type" in
+		plugin) item_label='plugin' ;;
+		config) item_label='config' ;;
+		esac
+		for change_type in 'added' 'updated'; do
+			case "$change_type" in
+			added) change_label='added' ;;
+			updated) change_label='updated' ;;
+			esac
 			names="$(LC_ALL=C awk -F '|' -v change_type="$change_type" -v item_type="$item_type" '
 				$1 == change_type && $2 == item_type {
-					if (names != "") names = names "、"
+					if (names != "") names = names ", "
 					names = names $3
 				}
 				END { print names }
 			' "$normalized_log")"
 			if [ -n "$names" ]; then
-				printf '  %s%s：%s\n' "$change_type" "$item_type" "$names"
+				printf '  %s %s: %s\n' "$change_label" "$item_label" "$names"
 			fi
 		done
 	done
@@ -143,25 +151,25 @@ validate_repository_source() {
 	local expected_type="$2"
 
 	if [ -L "$source" ]; then
-		error "仓库源文件不能是软链接：$source"
+		error "Repository source must not be a symlink: $source"
 		return 1
 	fi
 
 	case "$expected_type" in
 	file)
 		[ -f "$source" ] || {
-			error "缺少仓库文件：$source"
+			error "Missing repository file: $source"
 			return 1
 		}
 		;;
 	directory)
 		[ -d "$source" ] || {
-			error "缺少仓库目录：$source"
+			error "Missing repository directory: $source"
 			return 1
 		}
 		;;
 	*)
-		error "未知的托管路径类型：$expected_type"
+		error "Unknown managed path type: $expected_type"
 		return 1
 		;;
 	esac
@@ -270,7 +278,7 @@ backup_group_paths() {
 			mv "$target_path" "$backup_path" || return 1
 			BACKUP_CREATED=1
 			if ! installer_uses_summary_output; then
-				printf '  已备份 %s -> %s\n' "$target_path" "$backup_path"
+				printf '  Backed up %s -> %s\n' "$target_path" "$backup_path"
 			fi
 		fi
 	done <"$manifest"
@@ -318,7 +326,7 @@ rollback_group_paths() {
 		if [ "$rollback_mode" = 'install' ] && [ "$target_exists" -eq 1 ]; then
 			discard_path="$discard_root/$local_path"
 			if ! mkdir -p "$(dirname "$discard_path")" || ! mv "$target_path" "$discard_path"; then
-				error "回滚时无法清理新安装的路径：$target_path"
+				error "Failed to clean up newly installed path during rollback: $target_path"
 				rollback_failed=1
 				continue
 			fi
@@ -327,16 +335,16 @@ rollback_group_paths() {
 
 		if [ "$backup_exists" -eq 1 ]; then
 			if [ "$target_exists" -eq 1 ]; then
-				error "回滚目标被意外占用：$target_path"
+				error "Rollback target is unexpectedly occupied: $target_path"
 				rollback_failed=1
 				continue
 			fi
 			if ! mkdir -p "$(dirname "$target_path")" || ! mv "$backup_path" "$target_path"; then
-				error "无法恢复原配置：$target_path"
+				error "Failed to restore original configuration: $target_path"
 				rollback_failed=1
 			fi
 		elif [ "$had_original" -eq 1 ] && [ "$target_exists" -eq 0 ]; then
-			error "未找到原配置或其备份：$target_path"
+			error "Original configuration or backup not found: $target_path"
 			rollback_failed=1
 		fi
 	done <"$manifest"
@@ -353,35 +361,35 @@ deploy_group_transaction() {
 	local _repository_path local_path _expected_type _expected_mode _item_type _item_name
 
 	if ! installer_uses_summary_output; then
-		info "准备 $label 的完整配置集"
+		info "Staging full configuration set for $label"
 	fi
 	if ! stage_group_paths "$manifest" "$staging_root"; then
-		error "$label 准备失败，本机配置未改变"
+		error "$label: Staging failed; local configuration unchanged"
 		return 1
 	fi
 
 	if ! snapshot_existing_paths "$manifest" "$originals_log"; then
-		error "$label 本机状态记录失败，本机配置未改变"
+		error "$label: State snapshot failed; local configuration unchanged"
 		return 1
 	fi
 
 	if ! backup_group_paths "$manifest" "$group_id"; then
-		error "$label 备份失败，正在恢复已移动的路径"
+		error "$label: Backup failed; restoring moved paths"
 		rollback_group_paths "$manifest" "$group_id" "$originals_log" backup ||
-			error "$label 回滚不完整，请检查 $BACKUP_ROOT/$group_id"
+			error "$label: Rollback incomplete; check $BACKUP_ROOT/$group_id"
 		return 1
 	fi
 
 	if ! install_staged_paths "$manifest" "$staging_root"; then
-		error "$label 安装失败，正在恢复原配置"
+		error "$label: Install failed; restoring original configuration"
 		rollback_group_paths "$manifest" "$group_id" "$originals_log" install ||
-			error "$label 回滚不完整，请检查 $BACKUP_ROOT/$group_id"
+			error "$label: Rollback incomplete; check $BACKUP_ROOT/$group_id"
 		return 1
 	fi
 
 	if ! installer_uses_summary_output; then
 		while IFS='|' read -r _repository_path local_path _expected_type _expected_mode _item_type _item_name; do
-			success "已复制 $AGENT_CONFIG_INSTALL_HOME/$local_path"
+			success "Copied $AGENT_CONFIG_INSTALL_HOME/$local_path"
 		done <"$manifest"
 	fi
 }
@@ -401,20 +409,20 @@ install_managed_group() {
 	: >"$changes_log"
 	managed_entries >"$manifest"
 	if [ ! -s "$manifest" ]; then
-		error "$label 没有定义任何托管配置"
+		error "No managed entries defined for $label"
 		return 1
 	fi
 
 	if grep -q '|directory|' "$manifest" && ! command -v rsync >/dev/null 2>&1; then
-		error "安装托管目录需要 rsync"
+		error "rsync is required to install managed directories"
 		return 1
 	fi
 
 	if installer_uses_summary_output; then
-		info "检查 $label 配置"
+		info "Checking $label configuration"
 	else
-		info "比较仓库配置与本机配置"
-		printf '\n%s：\n' "$label"
+		info "Comparing repository and local configuration"
+		printf '\n%s:\n' "$label"
 	fi
 	while IFS='|' read -r repository_path local_path expected_type expected_mode item_type item_name; do
 		source_path="$(managed_source_path "$repository_path")"
@@ -423,9 +431,9 @@ install_managed_group() {
 
 		if [ ! -e "$target_path" ] && [ ! -L "$target_path" ]; then
 			if installer_uses_summary_output; then
-				record_managed_change "$changes_log" '新增' "$item_type" "$item_name" "$local_path"
+				record_managed_change "$changes_log" 'added' "$item_type" "$item_name" "$local_path"
 			else
-				printf '  [缺失] %s\n' "$target_path"
+				printf '  [missing] %s\n' "$target_path"
 			fi
 			group_missing=1
 			continue
@@ -433,10 +441,10 @@ install_managed_group() {
 
 		if [ -L "$target_path" ]; then
 			if installer_uses_summary_output; then
-				record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+				record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 			fi
 			if ! installer_uses_summary_output; then
-				printf '  [软链接冲突] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
+				printf '  [symlink conflict] %s -> %s\n' "$target_path" "$(readlink "$target_path" 2>/dev/null || printf '?')"
 			fi
 			group_conflict=1
 			continue
@@ -446,30 +454,30 @@ install_managed_group() {
 		file)
 			if [ ! -f "$target_path" ]; then
 				if installer_uses_summary_output; then
-					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+					record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 				else
-					printf '  [类型冲突] 预期为文件：%s\n' "$target_path"
+					printf '  [type conflict] expected file: %s\n' "$target_path"
 				fi
 				group_conflict=1
 			elif cmp -s "$source_path" "$target_path"; then
 				if managed_file_mode_matches "$target_path" "$expected_mode"; then
 					if ! installer_uses_summary_output; then
-						printf '  [一致] %s\n' "$target_path"
+						printf '  [ok] %s\n' "$target_path"
 					fi
 				else
 					if installer_uses_summary_output; then
-						record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+						record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 					else
 						actual_mode="$(stat -f '%Lp' "$target_path" 2>/dev/null || stat -c '%a' "$target_path" 2>/dev/null || printf '?')"
-						printf '  [权限漂移] %s（当前 %s，预期 %s）\n' "$target_path" "$actual_mode" "$expected_mode"
+						printf '  [mode drift] %s (current %s, expected %s)\n' "$target_path" "$actual_mode" "$expected_mode"
 					fi
 					group_missing=1
 				fi
 			else
 				if installer_uses_summary_output; then
-					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+					record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 				else
-					printf '  [内容不同] %s\n' "$target_path"
+					printf '  [modified] %s\n' "$target_path"
 					show_file_diff "$source_path" "$target_path"
 				fi
 				group_conflict=1
@@ -478,20 +486,20 @@ install_managed_group() {
 		directory)
 			if [ ! -d "$target_path" ]; then
 				if installer_uses_summary_output; then
-					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+					record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 				else
-					printf '  [类型冲突] 预期为目录：%s\n' "$target_path"
+					printf '  [type conflict] expected directory: %s\n' "$target_path"
 				fi
 				group_conflict=1
 			elif directory_is_equal "$source_path" "$target_path"; then
 				if ! installer_uses_summary_output; then
-					printf '  [一致] %s\n' "$target_path"
+					printf '  [ok] %s\n' "$target_path"
 				fi
 			else
 				if installer_uses_summary_output; then
-					record_managed_change "$changes_log" '更新' "$item_type" "$item_name" "$local_path"
+					record_managed_change "$changes_log" 'updated' "$item_type" "$item_name" "$local_path"
 				else
-					printf '  [内容不同] %s\n' "$target_path"
+					printf '  [modified] %s\n' "$target_path"
 					show_directory_diff "$source_path" "$target_path"
 				fi
 				group_conflict=1
@@ -510,35 +518,35 @@ install_managed_group() {
 	fi
 	if [ "$group_conflict" -eq 1 ]; then
 		if installer_uses_summary_output; then
-			printf '是否安装以上变更？现有配置会先备份，再整组更新。[y/N] '
+			printf 'Install these changes? Existing files will be backed up before updating the group. [y/N] '
 		else
-			printf '是否用仓库配置替换 %s 的全部托管路径？\n' "$label"
-			printf '  y = 先备份，再整组覆盖\n'
-			printf '  N = 整组保持不变（包括当前缺失的路径）[y/N] '
+			printf 'Replace all managed paths for %s with repository configuration?\n' "$label"
+			printf '  y = Back up existing files and overwrite the group\n'
+			printf '  N = Keep the group unchanged (including missing paths) [y/N] '
 		fi
 		if ! IFS= read -r answer; then
 			printf '\n' >&2
-			error "无法读取确认，本机文件未改变"
+			error "Failed to read confirmation; local files unchanged"
 			return 1
 		fi
 		case "$answer" in
 		y | Y | yes | YES | Yes) ;;
 		*)
-			info "$label 已整组保持不变"
+			info "$label kept unchanged"
 			return 0
 			;;
 		esac
 	elif [ "$group_missing" -eq 0 ]; then
-		success "$label 已与仓库一致"
+		success "$label is already up to date"
 		return 0
 	elif ! installer_uses_summary_output; then
-		info "$label 没有本机冲突，将自动安装完整配置集"
+		info "No local conflicts for $label; installing full configuration set"
 	fi
 
 	deploy_group_transaction "$manifest" "$group_id" "$label"
 	# shellcheck disable=SC2034 # Read by summary-mode callers after this function returns.
 	INSTALL_MANAGED_CHANGED=1
 	if [ "$BACKUP_CREATED" -eq 1 ] && ! installer_uses_summary_output; then
-		info "原本机文件保存在 $BACKUP_ROOT"
+		info "Original local files backed up to $BACKUP_ROOT"
 	fi
 }

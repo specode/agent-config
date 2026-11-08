@@ -27,7 +27,11 @@ function isObject(value: unknown): value is JsonObject {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Remove terminal/control sequences, collapse whitespace, and enforce a visible length. */
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, {
+	granularity: "grapheme",
+});
+
+/** Remove terminal and bidi/format controls (preserving ZWNJ/ZWJ), collapse whitespace, and cap grapheme length. */
 export function sanitizeUiMetaText(value: string, maxLength: number): string {
 	const normalized = value
 		// OSC, including hyperlinks and terminal-title writes.
@@ -36,17 +40,20 @@ export function sanitizeUiMetaText(value: string, maxLength: number): string {
 		.replace(/\u001B[P^_X][\s\S]*?\u001B\\/g, "")
 		// CSI sequences.
 		.replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "")
-		// Invisible direction/word-join controls must not affect the visible label.
-		.replace(/[\u200B-\u200D\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g, "")
+		// Strip zero-width space/BOM/word-joiner and bidi controls, but keep ZWNJ/ZWJ for scripts and emoji.
+		.replace(/[\u200B\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g, "")
 		// Remaining C0/C1 controls are word boundaries, never executable text.
 		.replace(/[\u0000-\u001F\u007F-\u009F]/g, " ")
 		.replace(/\s+/g, " ")
 		.trim();
 
-	const characters = Array.from(normalized);
-	if (characters.length <= maxLength) return normalized;
+	const graphemes = Array.from(
+		GRAPHEME_SEGMENTER.segment(normalized),
+		({ segment }) => segment,
+	);
+	if (graphemes.length <= maxLength) return normalized;
 	if (maxLength <= 1) return "…";
-	return `${characters.slice(0, maxLength - 1).join("")}…`;
+	return `${graphemes.slice(0, maxLength - 1).join("")}…`;
 }
 
 function parseSessionDirective(

@@ -8,10 +8,10 @@ source "$AGENT_CONFIG_ROOT/lib/install-managed.sh"
 
 usage() {
 	cat <<'EOF'
-用法：./install-rules.sh
+Usage: ./install-rules.sh
 
-将同一份全局 harness rules 安装到各 harness 的规则路径。
-若检测到内容冲突，会先显示差异，再按整组询问是否备份并覆盖。
+Install the shared global harness rules to each harness rule path.
+If conflicts are detected, diffs are shown before prompting to back up and overwrite the group.
 EOF
 }
 
@@ -23,7 +23,7 @@ case "${1:-}" in
 	;;
 *)
 	usage >&2
-	error "未知参数：$1"
+	error "Unknown argument: $1"
 	exit 1
 	;;
 esac
@@ -38,4 +38,4 @@ managed_entries() {
 }
 
 install_managed_group 'rules' 'Harness rules'
-success 'Harness rules 安装完成'
+success 'Harness rules installed'

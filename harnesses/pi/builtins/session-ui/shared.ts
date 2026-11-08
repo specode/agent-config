@@ -1,4 +1,5 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 
 export interface TextResult {
 	content?: Array<{
@@ -15,10 +16,10 @@ export function normalizeInline(value: string): string {
 }
 
 export function ellipsize(value: string, max: number): string {
-	const normalized = normalizeInline(value);
-	if (normalized.length <= max) return normalized;
-	if (max <= 1) return "…";
-	return `${normalized.slice(0, max - 1)}…`;
+	return truncateToWidth(normalizeInline(value), max, "…").replace(
+		/\u001B\[0m/g,
+		"",
+	);
 }
 
 export function sanitizeTerminalText(text: string): string {
