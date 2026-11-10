@@ -2,6 +2,7 @@
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "theme": "system",
   "enabledModels": [
+    "claude-bridge/claude-fable-5-2",
     "claude-bridge/claude-opus-5-5",
     "claude-bridge/claude-sonnet-5-5",
     "openai-codex/gpt-6-astra",
