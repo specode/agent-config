@@ -62,13 +62,14 @@ test("installs the enabled model list with Claude Bridge models first", (t) => {
 	assert.deepEqual(
 		settings.enabledModels,
 		[
+			"claude-bridge/claude-fable-5-2",
 			"claude-bridge/claude-opus-5-5",
 			"claude-bridge/claude-sonnet-5-5",
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
 			"xai/grok-4.7",
 			"antigravity/gemini-4-argon",
-			"google/gemini-4-argon",
+			"google/gemini-4-carbon",
 			"antigravity/gemini-3.8-flash",
 			"antigravity/claude-opus-5-5",
 			"antigravity/claude-sonnet-5-5",
@@ -100,19 +101,38 @@ test("does not declare or deploy interactive shell", (t) => {
 	assert.deepEqual(calls(f), []);
 });
 
-test("installs only the requested Codex context override", (t) => {
+test("preserves the requested Codex context override", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
 	const target = join(f.agentDir, "models.json");
 	assert.equal(lstatSync(target).isSymbolicLink(), false);
-	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")), {
-		providers: {
-			"openai-codex": {
-				modelOverrides: {
-					"gpt-6-astra": { contextWindow: 500000 },
-				},
-			},
+	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")).providers["openai-codex"], {
+		modelOverrides: {
+			"gpt-6-astra": { contextWindow: 500000 },
 		},
+	});
+});
+
+test("installs Carbon on Google without credentials or Antigravity overrides", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const config = JSON.parse(readFileSync(join(f.agentDir, "models.json"), "utf8"));
+	assert.deepEqual(Object.keys(config.providers).sort(), ["google", "openai-codex"]);
+	assert.deepEqual(config.providers.google, {
+		models: [{
+			id: "gemini-4-carbon",
+			name: "Gemini 4 Carbon",
+			api: "google-generative-ai",
+			baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+			reasoning: true,
+			thinkingLevelMap: {
+				off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: null, max: null,
+			},
+			input: ["text", "image"],
+			cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 0 },
+			contextWindow: 1048576,
+			maxTokens: 32768,
+		}],
 	});
 });
 

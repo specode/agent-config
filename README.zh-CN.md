@@ -79,7 +79,9 @@ npx skills update -g
 | `openai-codex` | `gpt-6-astra`、`gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`（`gpt-6-astra` 本地上下文设为 500K） |
 | `xai` | `grok-4.7` | OAuth 登录 |
 | `antigravity` | `gemini-4-argon`、`gemini-3.8-flash`、`claude-opus-5-5`、`claude-sonnet-5-5` | `/antigravity.refresh` 刷新列表 |
-| `google` | `gemini-4-argon` | 环境变量 `GEMINI_API_KEY` |
+| `google` | `gemini-4-carbon` | 环境变量 `GEMINI_API_KEY`；Carbon 定义在 [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` |
+
+通过 `/model google/gemini-4-carbon` 选择 Carbon（安装后先 `/reload` 或重启 Pi）。它走 Gemini API 按量付费，不使用 Antigravity 订阅额度。本地费用元数据采用截至 2026 年 11 月 30 日的优惠价，价格变化时需更新；输出上限按当前模型元数据接口设为 32,768 Token。
 
 [Fast](harnesses/pi/builtins/fast/README.zh-CN.md) 高优先级请求：`/fast [on|off|status]`。
 - 配置：[harnesses/pi/plugin-configs/fast/config.json](harnesses/pi/plugin-configs/fast/config.json) → `~/.pi/agent/extensions/fast.json`

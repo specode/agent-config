@@ -79,7 +79,9 @@ Config paths (run `/reload` after changes):
 | `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (`gpt-6-astra` local context window set to 500K) |
 | `xai` | `grok-4.7` | OAuth login |
 | `antigravity` | `gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5` | Refresh catalog with `/antigravity.refresh` |
-| `google` | `gemini-4-argon` | `GEMINI_API_KEY` environment variable |
+| `google` | `gemini-4-carbon` | `GEMINI_API_KEY` environment variable; Carbon is defined in [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` |
+
+Select Carbon with `/model google/gemini-4-carbon` (run `/reload` or restart Pi after installing). It uses paid Gemini API billing, not Antigravity subscription quota. Its local cost metadata uses introductory rates through November 30, 2026; update it when pricing changes. The output cap is 32,768 tokens, matching the current model metadata endpoint.
 
 [Fast](harnesses/pi/builtins/fast/README.md) priority requests: `/fast [on|off|status]`.
 - Config: [harnesses/pi/plugin-configs/fast/config.json](harnesses/pi/plugin-configs/fast/config.json) → `~/.pi/agent/extensions/fast.json`
