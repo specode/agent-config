@@ -6,7 +6,7 @@ Pi terminal UI extension providing a single-line footer statusline, tool activit
 
 ## Quick Start
 
-From the repository root (requires Pi 1.4.0 and `rsync`):
+From the repository root (requires Pi 1.4+ and `rsync`):
 
 ```bash
 ./install-harness.sh pi
@@ -40,11 +40,11 @@ Displayed items and order are controlled by `statusline.segments`:
 | `branch` | Git branch |
 | `context` | Context window usage percentage and capacity |
 | `usage` | Subscription window quota and reset countdown (requires `pi-subscription-usage`) |
+| `tokens` | Cumulative input / output tokens (`↑in ↓out`; omitted in repo `config.json`) |
 | `cache` | Assistant request cache hit rate (`last/recent5/session`) |
 | `cost` | Cumulative estimated session cost (catalog-rate estimate) |
 | `extensions` | Other non-excluded extension statuses |
-| `tokens` | Cumulative input / output tokens (`↑in ↓out`, hidden by default in repo config) |
-| `session` | Session name (hidden by default) |
+| `session` | Session name (disabled by default) |
 
 `fast` only indicates that local fast-mode handling is active; see [Fast](../fast/README.md). Check MCP status with `/mcp`.
 
@@ -62,8 +62,8 @@ Run `/reload` after editing. All modules (`toolActivity`, `workAnimation`, `comp
 | `workAnimation.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |
 | `workAnimation.intervalMs` | `180` | `100`–`500` (ms) |
 | `statusline.overflow` | `"drop-right"` | `"drop-right"` (hide from right) \| `"priority"` (compact first, then hide by priority) |
-| `statusline.segments` | Default list above | Array of segment IDs (replaces the full list and deduplicates) |
-| `statusline.extensionStatuses.exclude` | `[]` | Array of status IDs to exclude (supports `*` wildcards) |
+| `statusline.segments` | All segments above except `session` | Array of segment IDs (replaces the default list and deduplicates) |
+| `statusline.extensionStatuses.exclude` | `["fast", "mcp", "mcp-*", "subscription-usage"]` | Status IDs excluded from `extensions` (replaces defaults; supports `*` wildcards) |
 | `uiMeta.title.enabled` | `true` | `boolean` |
 | `uiMeta.title.maxLength` | `36` | `8`–`80` |
 | `uiMeta.sessionName.enabled` | `true` | `boolean` |

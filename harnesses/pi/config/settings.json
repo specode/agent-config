@@ -34,8 +34,6 @@
     "npm:pi-claude-bridge",
     "npm:@specode/pi-last-model-effort",
     "npm:@specode/pi-subscription-usage",
-    "npm:@specode/pi-kimi-webbridge-bootstrap",
-    "npm:@specode/pi-kimi-cu",
     "npm:@specode/pi-subscription-image",
     "npm:pi-antigravity"
   ],

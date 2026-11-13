@@ -75,7 +75,24 @@ test("installs the enabled model list with Claude Bridge models first", (t) => {
 			"antigravity/claude-sonnet-5-5",
 		],
 	);
-	assert.equal(settings.packages.includes("npm:pi-claude-bridge"), true);
+});
+
+test("installs the current extension package list without invoking package managers", (t) => {
+	const f = fixture(t);
+	assertSuccess(install(f));
+	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
+	assert.deepEqual(settings.packages, [
+		"npm:pi-web-access",
+		"npm:@juicesharp/rpiv-ask-user-question",
+		"git:github.com/badlogic/pi-subagent",
+		"npm:@ff-labs/pi-fff",
+		"npm:pi-claude-bridge",
+		"npm:@specode/pi-last-model-effort",
+		"npm:@specode/pi-subscription-usage",
+		"npm:@specode/pi-subscription-image",
+		"npm:pi-antigravity",
+	]);
+	assert.deepEqual(calls(f), []);
 });
 
 test("declares the upstream subagent Git package without a pinned ref", (t) => {

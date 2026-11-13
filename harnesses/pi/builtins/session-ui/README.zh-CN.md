@@ -6,7 +6,7 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 
 ## 快速开始
 
-在仓库根目录执行（需 Pi 1.4.0 与 `rsync`）：
+在仓库根目录执行（需 Pi 1.4+ 与 `rsync`）：
 
 ```bash
 ./install-harness.sh pi
@@ -40,11 +40,11 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 | `branch` | Git 分支 |
 | `context` | 上下文使用率与窗口大小 |
 | `usage` | 订阅周期额度与重置倒计时（依赖 `pi-subscription-usage`） |
+| `tokens` | 累计输入 / 输出 token（`↑输入 ↓输出`；仓库 `config.json` 默认省略） |
 | `cache` | assistant 请求缓存命中率（`当前/最近5次/会话`） |
 | `cost` | 会话累计估算费用（按目录单价估算） |
 | `extensions` | 未被排除的其他扩展状态 |
-| `tokens` | 累计输入 / 输出 token（`↑输入 ↓输出`，仓库配置默认隐藏） |
-| `session` | 会话名称（默认隐藏） |
+| `session` | 会话名称（默认不启用） |
 
 `fast` 仅代表本地已启用加速策略，详见 [Fast 说明](../fast/README.zh-CN.md)；MCP 状态用 `/mcp` 查看。
 
@@ -62,8 +62,8 @@ Pi 终端界面扩展：底部单行状态栏、工具调用面板、工作动�
 | `workAnimation.placement` | `"aboveEditor"` | `"aboveEditor"` \| `"belowEditor"` |
 | `workAnimation.intervalMs` | `180` | `100`–`500`（ms） |
 | `statusline.overflow` | `"drop-right"` | `"drop-right"`（从右隐藏）\| `"priority"`（先紧凑再按优先级隐藏） |
-| `statusline.segments` | 见上表默认项 | 状态段 ID 数组（整组替换并去重） |
-| `statusline.extensionStatuses.exclude` | `[]` | 排除的状态 ID 数组（支持 `*` 通配符） |
+| `statusline.segments` | 除 `session` 外的上表各段 | 状态段 ID 数组（整组替换默认列表并去重） |
+| `statusline.extensionStatuses.exclude` | `["fast", "mcp", "mcp-*", "subscription-usage"]` | 从 `extensions` 段排除的状态 ID（整组替换默认值，支持 `*` 通配符） |
 | `uiMeta.title.enabled` | `true` | `boolean` |
 | `uiMeta.title.maxLength` | `36` | `8`–`80` |
 | `uiMeta.sessionName.enabled` | `true` | `boolean` |
