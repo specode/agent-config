@@ -38,7 +38,7 @@ pi update --all
 ~/.grok/AGENTS.md
 ```
 
-共用 Skills 不纳入本仓库托管，通过 `npx skills` 安装到 `~/.agents/skills/`：
+共用 Skills 不纳入本仓库托管，通过 `npx skills` 安装到 `~/.agents/skills/`（已打开的 Pi 会话执行 `/reload` 生效）：
 
 ```bash
 npx skills list -g -a claude-code pi
@@ -46,7 +46,25 @@ npx skills add <repo> -g -a claude-code pi -y
 npx skills update -g
 ```
 
-桌面 GUI 自动化使用 [cua-driver](https://cua.ai/docs/cua-driver)（Pi 与 Claude Code 共用，本仓库不托管）：按官方文档将 `cua-driver` CLI 装入 `PATH` 并安装配套 Skill（默认走 CLI，也支持 MCP）；macOS 需授予“辅助功能”与“屏幕录制”权限，装完运行 `cua-driver doctor` 自检。
+#### Computer Use
+
+Pi 与 Claude Code 共用 CLI + Skill 方案（均不纳入本仓库托管）：
+
+- **桌面应用 / 原生弹窗（[cua-driver](https://cua.ai/docs/cua-driver)）**：按官方文档将 `cua-driver` 装入 `PATH` 并安装配套 Skill；macOS 需授予“辅助功能”与“屏幕录制”权限，装完运行 `cua-driver doctor` 自检。
+- **网页与现有登录态（[playwright-cli](https://github.com/microsoft/playwright-cli)）**：安装 CLI、共享 Skill 与 Chrome 扩展（[Playwright Extension](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)）：
+
+  ```bash
+  npm install -g @playwright/cli@latest
+  npx skills add microsoft/playwright-cli --skill playwright-cli -g -a claude-code pi -y
+  ```
+
+  Skill 已由 `npx skills` 托管，无需再跑 `playwright-cli install --skills`。`open` 会启动独立浏览器；复用已登录的 Chrome 用 `attach`（首次在 Chrome 弹窗中勾选授权标签页，结束时 `detach` 不会关闭浏览器）：
+
+  ```bash
+  playwright-cli attach --extension=chrome
+  playwright-cli snapshot
+  playwright-cli detach
+  ```
 
 ### Pi
 

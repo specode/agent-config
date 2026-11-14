@@ -38,7 +38,7 @@ Default preferences:
 ~/.grok/AGENTS.md
 ```
 
-Shared skills are not bundled in this repository; install and update them under `~/.agents/skills/` with `npx skills`:
+Shared skills are not bundled in this repository; install and update them under `~/.agents/skills/` with `npx skills` (run `/reload` in active Pi sessions):
 
 ```bash
 npx skills list -g -a claude-code pi
@@ -46,7 +46,25 @@ npx skills add <repo> -g -a claude-code pi -y
 npx skills update -g
 ```
 
-For desktop GUI automation across Pi and Claude Code, install the [cua-driver](https://cua.ai/docs/cua-driver) CLI (in `PATH`) and companion skill per the official docs (unmanaged here; uses CLI by default and also supports MCP). On macOS, grant Accessibility and Screen Recording permissions, then verify with `cua-driver doctor`.
+#### Computer Use
+
+Pi and Claude Code share CLI + Skill setups for desktop and browser automation (unmanaged here):
+
+- **Desktop apps & native dialogs ([cua-driver](https://cua.ai/docs/cua-driver))**: Install the `cua-driver` CLI in `PATH` and its companion skill per the official docs. On macOS, grant Accessibility and Screen Recording permissions, then verify with `cua-driver doctor`.
+- **Web pages & logged-in Chrome ([playwright-cli](https://github.com/microsoft/playwright-cli))**: Install the CLI, shared skill, and [Playwright Extension](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm):
+
+  ```bash
+  npm install -g @playwright/cli@latest
+  npx skills add microsoft/playwright-cli --skill playwright-cli -g -a claude-code pi -y
+  ```
+
+  Skip `playwright-cli install --skills` since `npx skills` already manages the skill. `open` launches an isolated browser; use `attach` to reuse an open Chrome profile (select allowed tabs in the Chrome prompt; `detach` leaves Chrome running):
+
+  ```bash
+  playwright-cli attach --extension=chrome
+  playwright-cli snapshot
+  playwright-cli detach
+  ```
 
 ### Pi
 
