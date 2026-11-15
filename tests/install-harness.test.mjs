@@ -90,7 +90,7 @@ test("installs the current extension package list without invoking package manag
 		"npm:@specode/pi-last-model-effort",
 		"npm:@specode/pi-subscription-usage",
 		"npm:@specode/pi-subscription-image",
-		"npm:pi-antigravity",
+		"npm:@specode/pi-antigravity",
 	]);
 	assert.deepEqual(calls(f), []);
 });

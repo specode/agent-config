@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Personal configuration for Pi (1.4+) and Claude Code. Manages only config files and local extensions; credentials and session data are excluded.
+Personal configuration for Pi (1.5.2+) and Claude Code. Manages only config files and local extensions; credentials and session data are excluded.
 
 ## Quick Start
 
@@ -96,7 +96,7 @@ Config paths (run `/reload` after changes):
 | `claude-bridge` | `claude-fable-5-2`, `claude-opus-5-5`, `claude-sonnet-5-5` | Reuses `claude auth login` (Max); [config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
 | `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (`gpt-6-astra` local context window set to 500K) |
 | `xai` | `grok-4.7` | OAuth login |
-| `antigravity` | `gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5` | Refresh catalog with `/antigravity.refresh` |
+| `antigravity` | `gemini-4-argon`, `gemini-3.8-flash`, `claude-opus-5-5`, `claude-sonnet-5-5` | [@specode/pi-antigravity](https://github.com/specode/pi-antigravity); native Pi OAuth and model discovery |
 | `google` | `gemini-4-carbon` | `GEMINI_API_KEY` environment variable; defined in [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` |
 
 Select Carbon with `/model google/gemini-4-carbon` (`/reload` or restart after install). It bills via the Gemini API rather than Antigravity quota; `models.json` sets a 32,768-token output cap and introductory pricing (valid through 2026-11-30).
