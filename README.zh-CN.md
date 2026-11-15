@@ -96,7 +96,7 @@ Pi 与 Claude Code 共用 CLI + Skill 方案（均不纳入本仓库托管）：
 | `claude-bridge` | `claude-fable-5-2`、`claude-opus-5-5`、`claude-sonnet-5-5` | 复用 `claude auth login`（Max）；[config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
 | `openai-codex` | `gpt-6-astra`、`gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json`（`gpt-6-astra` 本地上下文设为 500K） |
 | `xai` | `grok-4.7` | OAuth 登录 |
-| `antigravity` | `gemini-4-argon`、`gemini-3.8-flash`、`claude-opus-5-5`、`claude-sonnet-5-5` | [@specode/pi-antigravity](https://github.com/specode/pi-antigravity)；Pi 原生 OAuth 与模型发现 |
+| `antigravity` | `gemini-4-argon`、`claude-opus-5-5`、`claude-sonnet-5-5` | [@specode/pi-antigravity](https://github.com/specode/pi-antigravity)；Pi 原生 OAuth 与模型发现 |
 | `google` | `gemini-4-carbon` | 环境变量 `GEMINI_API_KEY`；定义在 [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` |
 
 Carbon 通过 `/model google/gemini-4-carbon` 选择（安装配置后需 `/reload` 或重启），按 Gemini API 用量计费，不占用 Antigravity 订阅额度；`models.json` 中配置了 32,768 输出上限及截至 2026-11-30 的优惠单价。
