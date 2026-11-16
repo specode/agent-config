@@ -68,6 +68,7 @@ test("installs the enabled model list with Claude Bridge models first", (t) => {
 			"openai-codex/gpt-6-astra",
 			"openai-codex/gpt-6.1-sol",
 			"xai/grok-4.7",
+			"antigravity/gemini-4-hydrogen",
 			"antigravity/gemini-4-argon",
 			"google/gemini-4-carbon",
 			"antigravity/claude-opus-5-5",
