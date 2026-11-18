@@ -65,8 +65,8 @@ test("installs the enabled model list with Claude Bridge models first", (t) => {
 			"claude-bridge/claude-fable-5-2",
 			"claude-bridge/claude-opus-5-5",
 			"claude-bridge/claude-sonnet-5-5",
-			"openai-codex/gpt-6-astra",
-			"openai-codex/gpt-6.1-sol",
+			"openai-codex/gpt-6.2-astra",
+			"openai-codex/gpt-6.2-sol",
 			"xai/grok-4.7",
 			"antigravity/gemini-4-hydrogen",
 			"antigravity/gemini-4-argon",
@@ -125,7 +125,7 @@ test("preserves the requested Codex context override", (t) => {
 	assert.equal(lstatSync(target).isSymbolicLink(), false);
 	assert.deepEqual(JSON.parse(readFileSync(target, "utf8")).providers["openai-codex"], {
 		modelOverrides: {
-			"gpt-6-astra": { contextWindow: 500000 },
+			"gpt-6.2-astra": { contextWindow: 500000 },
 		},
 	});
 });

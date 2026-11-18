@@ -94,7 +94,7 @@ Config paths (run `/reload` after changes):
 | Provider | Enabled Models | Notes / Config |
 | --- | --- | --- |
 | `claude-bridge` | `claude-fable-5-2`, `claude-opus-5-5`, `claude-sonnet-5-5` | Reuses `claude auth login` (Max); [config.json](harnesses/pi/plugin-configs/claude-bridge/config.json) → `~/.pi/agent/claude-bridge.json` |
-| `openai-codex` | `gpt-6-astra`, `gpt-6.1-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (`gpt-6-astra` local context window set to 500K) |
+| `openai-codex` | `gpt-6.2-astra`, `gpt-6.2-sol` | [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` (`gpt-6.2-astra` local context window set to 500K) |
 | `xai` | `grok-4.7` | OAuth login |
 | `antigravity` | `gemini-4-hydrogen`, `gemini-4-argon`, `claude-opus-5-5`, `claude-sonnet-5-5` | [@specode/pi-antigravity](https://github.com/specode/pi-antigravity); native Pi OAuth and model discovery |
 | `google` | `gemini-4-carbon` | `GEMINI_API_KEY` environment variable; defined in [models.json](harnesses/pi/config/models.json) → `~/.pi/agent/models.json` |
