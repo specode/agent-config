@@ -7,13 +7,12 @@
     "claude-bridge/claude-sonnet-5-5",
     "openai-codex/gpt-6.2-astra",
     "openai-codex/gpt-6.2-sol",
-    "xai/grok-4.7",
     "antigravity/gemini-4-neon",
-    "antigravity/gemini-4-hydrogen",
     "antigravity/gemini-4-argon",
     "google/gemini-4-carbon",
     "antigravity/claude-opus-5-5",
-    "antigravity/claude-sonnet-5-5"
+    "antigravity/claude-sonnet-5-5",
+    "xai/grok-4.7"
   ],
   "defaultTools": [
     "+codemode"
@@ -32,10 +31,10 @@
     "npm:@juicesharp/rpiv-ask-user-question",
     "git:github.com/badlogic/pi-subagent",
     "npm:@ff-labs/pi-fff",
-    "npm:pi-claude-bridge",
     "npm:@specode/pi-last-model-effort",
     "npm:@specode/pi-subscription-usage",
     "npm:@specode/pi-subscription-image",
+    "npm:pi-claude-bridge",
     "npm:@specode/pi-antigravity"
   ],
   "hideThinkingBlock": true,
