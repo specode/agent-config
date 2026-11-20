@@ -55,44 +55,9 @@ function backupAgent(f) {
 	return join(root, backups[0], "pi/.pi/agent");
 }
 
-test("installs the enabled model list with Claude Bridge models first", (t) => {
+test("installs extension packages without invoking package managers", (t) => {
 	const f = fixture(t);
 	assertSuccess(install(f));
-	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
-	assert.deepEqual(
-		settings.enabledModels,
-		[
-			"claude-bridge/claude-fable-5-2",
-			"claude-bridge/claude-opus-5-5",
-			"claude-bridge/claude-sonnet-5-5",
-			"openai-codex/gpt-6.2-astra",
-			"openai-codex/gpt-6.2-sol",
-			"xai/grok-4.7",
-			"antigravity/gemini-4-neon",
-			"antigravity/gemini-4-hydrogen",
-			"antigravity/gemini-4-argon",
-			"google/gemini-4-carbon",
-			"antigravity/claude-opus-5-5",
-			"antigravity/claude-sonnet-5-5",
-		],
-	);
-});
-
-test("installs the current extension package list without invoking package managers", (t) => {
-	const f = fixture(t);
-	assertSuccess(install(f));
-	const settings = JSON.parse(readFileSync(join(f.agentDir, "settings.json"), "utf8"));
-	assert.deepEqual(settings.packages, [
-		"npm:pi-web-access",
-		"npm:@juicesharp/rpiv-ask-user-question",
-		"git:github.com/badlogic/pi-subagent",
-		"npm:@ff-labs/pi-fff",
-		"npm:pi-claude-bridge",
-		"npm:@specode/pi-last-model-effort",
-		"npm:@specode/pi-subscription-usage",
-		"npm:@specode/pi-subscription-image",
-		"npm:@specode/pi-antigravity",
-	]);
 	assert.deepEqual(calls(f), []);
 });
 

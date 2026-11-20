@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { findPackageJSON } from "node:module";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { DEFAULT_SESSION_UI_CONFIG } from "./config.ts";
 import { UI_META_SENTINEL } from "./ui-meta-core.ts";
 
 const root = process.env.PI_PACKAGE_ROOT;
-let registerUiMeta, ExtensionRunner, AgentSession, buildSystemPromptSections, diffSystemPromptSections;
+let registerUiMeta, ExtensionRunner, AgentSession, buildSystemPromptSections, diffSystemPromptSections, getCurrentSystemMessage;
 if (root) {
 	const load = (path) => import(pathToFileURL(resolve(root, path)).href);
 	({ ExtensionRunner } = await load("dist/core/extensions/runner.js"));
 	({ AgentSession } = await load("dist/core/agent-session.js"));
 	({ buildSystemPromptSections, diffSystemPromptSections } = await load("dist/core/system-prompt.js"));
+	// Resolve pi-ai from Pi's own location so nested and hoisted installs both work.
+	const piAiPackage = findPackageJSON("@earendil-works/pi-ai", pathToFileURL(resolve(root, "package.json")));
+	({ getCurrentSystemMessage } = await import(pathToFileURL(resolve(dirname(piAiPackage), "dist/index.js")).href));
 	({ registerUiMeta } = await import("./ui-meta.ts"));
 }
 const options = { skip: !root };
@@ -376,9 +380,15 @@ test("preserves Pi prompt and tool restoration when another extension rewrites o
 	assert.equal(result.at(-1).content[0].text, "Observation placeholder");
 });
 
+// Mirrors how Pi persists prompt changes: replay the transcript's system sections and diff them
+// against the sections built from the hook-adjusted options. Tool loadout is out of scope here,
+// so the test uses Pi's public section helpers instead of private AgentSession methods.
 function preparePrompt(options, messages) {
-	const host = { _toolRegistry: new Map(), _applyToolLoadout: AgentSession.prototype._applyToolLoadout, agent: { state: {} } };
-	return AgentSession.prototype._preparePromptAndToolLoadout.call(host, options, messages);
+	const sections = diffSystemPromptSections(
+		getCurrentSystemMessage(messages)?.sections ?? {},
+		buildSystemPromptSections(options),
+	);
+	return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
 }
 
 test("persists one static section and recreates it after compaction without editing retained messages", options, async () => {
