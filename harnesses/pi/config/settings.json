@@ -6,7 +6,7 @@
     "claude-bridge/claude-opus-5-5",
     "claude-bridge/claude-sonnet-5-5",
     "antigravity/gemini-4-neon",
-    "google/gemini-4-carbon",
+    "google/gemini-4-neon",
     "openai-codex/gpt-6.2-astra",
     "openai-codex/gpt-6.2-sol",
     "xai/grok-4.7",
