@@ -70,6 +70,7 @@ pi)
 			'harnesses/pi/config/models.json|.pi/agent/models.json|file|-|config|model overrides' \
 			'harnesses/pi/config/keybindings.json|.pi/agent/keybindings.json|file|-|config|keybindings' \
 			"$PI_SESSION_UI_SOURCE|.pi/agent/extensions/session-ui|directory|-|plugin|session-ui" \
+			'harnesses/pi/builtins/copy-block|.pi/agent/extensions/copy-block|directory|-|plugin|Copy Block' \
 			'harnesses/pi/builtins/fast|.pi/agent/extensions/fast|directory|-|plugin|Fast' \
 			'harnesses/pi/plugin-configs/fast/config.json|.pi/agent/extensions/fast.json|file|-|config|Fast' \
 			'harnesses/pi/plugin-configs/pi-fff/config.json|.pi/agent/pi-fff.json|file|-|config|FFF' \

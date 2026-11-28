@@ -70,7 +70,7 @@ Pi 与 Claude Code 共用 CLI + Skill 方案（均不纳入本仓库托管）：
 
 #### 界面与快捷键
 
-[session-ui](harnesses/pi/builtins/session-ui/README.zh-CN.md) 提供单行状态栏、工具进度、工作动画、回合耗时、自动标题/会话命名，以及剪贴板图片紧凑粘贴与预览。状态栏订阅额度来自 `pi-subscription-usage`，上次使用的模型和档位由 `pi-last-model-effort` 记录。
+[session-ui](harnesses/pi/builtins/session-ui/README.zh-CN.md) 提供单行状态栏、工具进度、工作动画、回合耗时、自动标题/会话命名，以及剪贴板图片紧凑粘贴与预览。状态栏订阅额度来自 `pi-subscription-usage`，上次使用的模型和档位由 `pi-last-model-effort` 记录。[copy-block](harnesses/pi/builtins/copy-block/README.zh-CN.md) 提供交互式选择器，从原始 Markdown 复制代码块、引用块或完整回复（也可在外部编辑器中打开）。
 
 | 操作 | 命令 / 快捷键 |
 | --- | --- |
@@ -82,6 +82,7 @@ Pi 与 Claude Code 共用 CLI + Skill 方案（均不纳入本仓库托管）：
 | 翻整页 | `Alt+K` / `Alt+J` |
 | 跳到顶 / 底 | `Alt+,` / `Alt+.` |
 | 粘贴并预览图片 | `Ctrl+V`（macOS，光标移入 `[image #1]` 预览） |
+| 复制代码块 / 回复 | `Alt+C` 或 `/copy-block [N]` |
 
 配置路径（改完 `/reload` 生效）：
 - [harnesses/pi/plugin-configs/session-ui/config.json](harnesses/pi/plugin-configs/session-ui/config.json) → `~/.pi/agent/extensions/session-ui/config.json`

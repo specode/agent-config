@@ -141,6 +141,7 @@ test("maps the three source categories to Pi runtime paths without installing in
 		"config/keybindings.json": ".pi/agent/keybindings.json",
 		"builtins/session-ui/index.ts": ".pi/agent/extensions/session-ui/index.ts",
 		"builtins/session-ui/config.ts": ".pi/agent/extensions/session-ui/config.ts",
+		"builtins/copy-block/index.ts": ".pi/agent/extensions/copy-block/index.ts",
 		"builtins/fast/index.ts": ".pi/agent/extensions/fast/index.ts",
 		"plugin-configs/session-ui/config.json": ".pi/agent/extensions/session-ui/config.json",
 		"plugin-configs/fast/config.json": ".pi/agent/extensions/fast.json",
@@ -198,6 +199,7 @@ test("replaces managed plugin directories only after consent and backs up obsole
 	const oldFiles = {
 		"extensions/session-ui/obsolete.ts": "old session-ui module\n",
 		"extensions/session-ui/AGENTS.md": "old local rules\n",
+		"extensions/copy-block/obsolete.ts": "old copy-block module\n",
 		"extensions/fast/obsolete.ts": "old fast module\n",
 	};
 	const configPath = join(f.agentDir, "extensions/session-ui/config.json");

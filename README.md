@@ -70,7 +70,7 @@ Pi and Claude Code share CLI + Skill setups for desktop and browser automation (
 
 #### UI & Keybindings
 
-[session-ui](harnesses/pi/builtins/session-ui/README.md) provides a single-line statusline, tool activity panel, work animation, turn duration, automatic terminal title and session naming, and compact clipboard image paste with preview. Subscription quota in the statusline comes from `pi-subscription-usage`, and the last active model and effort are persisted by `pi-last-model-effort`.
+[session-ui](harnesses/pi/builtins/session-ui/README.md) provides a single-line statusline, tool activity panel, work animation, turn duration, automatic terminal title and session naming, and compact clipboard image paste with preview. Subscription quota in the statusline comes from `pi-subscription-usage`, and the last active model and effort are persisted by `pi-last-model-effort`. [copy-block](harnesses/pi/builtins/copy-block/README.md) adds an interactive picker to copy raw code blocks, quotes, or full replies (or open them in the external editor).
 
 | Action | Command / Keybinding |
 | --- | --- |
@@ -82,6 +82,7 @@ Pi and Claude Code share CLI + Skill setups for desktop and browser automation (
 | Page up / down | `Alt+K` / `Alt+J` |
 | Jump to top / bottom | `Alt+,` / `Alt+.` |
 | Paste & preview image | `Ctrl+V` (macOS; move cursor onto `[image #1]` to preview) |
+| Copy code block / reply | `Alt+C` or `/copy-block [N]` |
 
 Config paths (run `/reload` after changes):
 - [harnesses/pi/plugin-configs/session-ui/config.json](harnesses/pi/plugin-configs/session-ui/config.json) → `~/.pi/agent/extensions/session-ui/config.json`

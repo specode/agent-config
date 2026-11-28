@@ -79,6 +79,12 @@ harnesses/pi/
 - 区分允许尝试与后端实际接受，不根据速度、成功状态码或费用推测最终结果；`Fast: on` 只表示本地处理已生效。
 - 通过标准 `ctx.ui.setStatus()` 的 `fast` 键发布 `fast` 或清除状态。自定义 footer 从 `footerData.getExtensionStatuses()` 读取；位置、颜色与布局归 UI 扩展，禁止反向依赖 session-ui。
 
+### Copy Block：独立只读复制扩展
+
+- 整个目录可单独取出安装与测试，不依赖父仓库安装器或兄弟插件，不写会话或状态文件。
+- 直接从当前分支的原始助手消息 Markdown 源码提取围栏代码块、引用块和完整回复；渲染预览前过滤非 SGR 终端控制与转义序列，复制和编辑仍输出未改动的原始文本。
+- 命令 `/copy-block [N]` 与默认快捷键 `Alt+C` 不得与 Pi 内置命令或默认快捷键冲突；打开外部编辑器时须向 `SettingsManager.create()` 传递 `ctx.isProjectTrusted()`，复用 overlay 捕获的 `tui` 暂停/恢复终端而不触碰输入框草稿，并清理临时文件。
+
 ## 4. 修改与文档规范
 
 - 完成最小完整改动，不顺手重构无关模块；保留已有未提交修改。
@@ -98,11 +104,13 @@ node --test tests/*.test.mjs
 
 # 扩展单元测试：不需要账号或网络
 node --test harnesses/pi/builtins/session-ui/*.test.ts
+node --test harnesses/pi/builtins/copy-block/*.test.ts
 node --test harnesses/pi/builtins/fast/*.test.ts
 
 # 安装版 Pi 集成对照：路径按本机实际安装位置填写；未设置时跳过
 PI_PACKAGE_ROOT=/absolute/path/to/pi-coding-agent \
-  node --test harnesses/pi/builtins/session-ui/*.integration.test.mjs
+  node --test harnesses/pi/builtins/session-ui/*.integration.test.mjs \
+  harnesses/pi/builtins/copy-block/*.integration.test.mjs
 ```
 
 Fast 也应支持在其目录独立运行 `node --test ./fast.test.ts`。直接从仓库加载 session-ui 时使用 `harnesses/pi/builtins/session-ui/index.ts`；如需使用仓库配置，通过 `PI_SESSION_UI_CONFIG` 指向 `harnesses/pi/plugin-configs/session-ui/config.json` 的绝对路径；安装后仍读取插件目录内的 `config.json`。
